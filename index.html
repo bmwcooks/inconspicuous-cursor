@@ -401,7 +401,7 @@
 
         <div class="chart-wrapper" style="margin-bottom: 30px;">
             <div class="chart-header">
-                <h3>Grading Speed (New Grades Per Day)</h3>
+                <h3>Grading Speed & Market Price</h3>
                 <button class="export-btn" onclick="exportChart('gradingSpeedChart', 'Grading_Speed')">Download PNG</button>
             </div>
             <div class="chart-container top-chart-container">
@@ -549,7 +549,7 @@
             complete: function(results) {
                 priceData = results.data;
                 if (currentCardDetails) updateRecentSales();
-                if (currentCardDetails && currentDisplayData.length > 0) renderCharts();
+                if (currentCardDetails && currentDisplayData.length > 0) renderCharts(); 
             }
         });
     });
@@ -895,6 +895,7 @@
         let psa10Data = [];
         let priceTrendData = []; 
 
+        // POPULATION DATA PARSER
         if (isGrowthMode && dataArray.length > 0) {
             let baselineTotal = parseInt(dataArray[0]['Total Pop']) || 0;
             let baseline10 = parseInt(dataArray[0]['PSA 10 Pop']) || 0;
@@ -908,6 +909,7 @@
         const deltaTotalData = dataArray.map(item => item.deltaTotal);
         const delta10Data = dataArray.map(item => item.delta10);
 
+        // PRICE DATA PARSER (Shared by both charts now)
         const dbEntry = getCardDatabaseEntry(currentCardDetails);
         if (dbEntry && dbEntry.cert && priceData && priceData.length > 0) {
             const certNumber = dbEntry.cert;
@@ -944,61 +946,112 @@
             });
         }
 
+        // ==========================================
+        // CHART 1: GRADING SPEED + PRICE
+        // ==========================================
+        let speedDatasets = [
+            { 
+                label: 'Total Cards Graded', 
+                data: deltaTotalData, 
+                borderColor: '#1A365D', 
+                backgroundColor: '#1A365D', 
+                borderWidth: 2, 
+                fill: false, 
+                tension: 0.1,
+                yAxisID: 'y', // Left axis
+                datalabels: {
+                    color: '#1A365D',
+                    align: 'top',
+                    offset: 4,
+                    font: { weight: 'bold' },
+                    formatter: function(value) { return value > 0 ? '+' + value : ''; }
+                }
+            },
+            { 
+                label: 'PSA 10s Graded', 
+                data: delta10Data, 
+                borderColor: '#e53e3e', 
+                backgroundColor: '#e53e3e', 
+                borderWidth: 2, 
+                fill: false, 
+                tension: 0.1,
+                yAxisID: 'y', // Left axis
+                datalabels: {
+                    color: '#e53e3e',
+                    align: 'bottom',
+                    offset: 4,
+                    font: { weight: 'bold' },
+                    formatter: function(value) { return value > 0 ? '+' + value : ''; }
+                }
+            }
+        ];
+
+        if (priceTrendData.some(val => val !== null)) {
+            speedDatasets.push({
+                label: 'Market Avg Price ($)', 
+                data: priceTrendData, 
+                borderColor: '#48bb78', 
+                backgroundColor: '#48bb78',
+                borderWidth: 3, 
+                fill: false, 
+                tension: 0.1,
+                spanGaps: true, 
+                yAxisID: 'y1', // Right axis
+                datalabels: { display: false },
+                pointRadius: 4,
+                pointBackgroundColor: '#fff',
+                pointBorderWidth: 2
+            });
+        }
+
         if (mySpeedChart) mySpeedChart.destroy(); 
         mySpeedChart = new Chart(document.getElementById('gradingSpeedChart').getContext('2d'), {
             type: 'line',
             data: {
                 labels: labels,
-                datasets: [
-                    { 
-                        label: 'Total Cards Graded', 
-                        data: deltaTotalData, 
-                        borderColor: '#1A365D', 
-                        backgroundColor: '#1A365D', 
-                        borderWidth: 2, 
-                        fill: false, 
-                        tension: 0.1,
-                        datalabels: {
-                            color: '#1A365D',
-                            align: 'top',
-                            offset: 4,
-                            font: { weight: 'bold' },
-                            formatter: function(value) { return value > 0 ? '+' + value : ''; }
-                        }
-                    },
-                    { 
-                        label: 'PSA 10s Graded', 
-                        data: delta10Data, 
-                        borderColor: '#e53e3e', 
-                        backgroundColor: '#e53e3e', 
-                        borderWidth: 2, 
-                        fill: false, 
-                        tension: 0.1,
-                        datalabels: {
-                            color: '#e53e3e',
-                            align: 'bottom',
-                            offset: 4,
-                            font: { weight: 'bold' },
-                            formatter: function(value) { return value > 0 ? '+' + value : ''; }
-                        }
-                    }
-                ]
+                datasets: speedDatasets
             },
             options: { 
                 responsive: true, 
                 maintainAspectRatio: false,
                 layout: { padding: { top: 25, right: 20, left: 20, bottom: 20 } },
+                interaction: { mode: 'index', intersect: false }, // Syncs tooltips vertically
                 plugins: {
                     datalabels: {
-                        display: function(context) { return context.dataset.data[context.dataIndex] > 0; }
+                        display: function(context) { 
+                            // Only show datalabels for pop numbers, not the price line
+                            if (context.dataset.label === 'Market Avg Price ($)') return false;
+                            return context.dataset.data[context.dataIndex] > 0; 
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        type: 'linear',
+                        display: true,
+                        position: 'left',
+                        title: { display: true, text: 'Cards Graded', color: '#1A365D', font: {weight: 'bold'} }
+                    },
+                    y1: {
+                        type: 'linear',
+                        display: 'auto', // Disappears when price toggle is clicked off
+                        position: 'right',
+                        title: { display: true, text: 'Price ($)', color: '#48bb78', font: {weight: 'bold'} },
+                        grid: { drawOnChartArea: false }, 
+                        ticks: {
+                            callback: function(value) {
+                                return '$' + value;
+                            }
+                        }
                     }
                 }
             }
         });
 
-        if (myTotalChart) myTotalChart.destroy();
-        
-        let datasets = [
+        // ==========================================
+        // CHART 2: TOTAL POPULATION + PRICE
+        // ==========================================
+        let totalDatasets = [
             { 
                 label: 'Total Pop', 
                 data: totalPopData, 
@@ -1007,7 +1060,7 @@
                 borderWidth: 2, 
                 fill: true, 
                 tension: 0.1,
-                yAxisID: 'y',
+                yAxisID: 'y', // Left axis
                 datalabels: { display: false } 
             },
             { 
@@ -1018,13 +1071,13 @@
                 borderWidth: 2, 
                 fill: false, 
                 tension: 0.1, 
-                yAxisID: 'y',
+                yAxisID: 'y', // Left axis
                 datalabels: { display: false } 
             }
         ];
 
         if (priceTrendData.some(val => val !== null)) {
-            datasets.push({
+            totalDatasets.push({
                 label: 'Market Avg Price ($)', 
                 data: priceTrendData, 
                 borderColor: '#48bb78', 
@@ -1033,7 +1086,7 @@
                 fill: false, 
                 tension: 0.1,
                 spanGaps: true, 
-                yAxisID: 'y1',
+                yAxisID: 'y1', // Right axis
                 datalabels: { display: false },
                 pointRadius: 4,
                 pointBackgroundColor: '#fff',
@@ -1041,11 +1094,12 @@
             });
         }
 
+        if (myTotalChart) myTotalChart.destroy();
         myTotalChart = new Chart(document.getElementById('totalPopChart').getContext('2d'), {
             type: 'line',
             data: {
                 labels: labels,
-                datasets: datasets
+                datasets: totalDatasets
             },
             options: { 
                 responsive: true, 
@@ -1058,10 +1112,9 @@
                         position: 'left',
                         title: { display: true, text: 'Population Count', color: '#1A365D', font: {weight: 'bold'} }
                     },
-                    // FIX: Changed display to 'auto' so it hides when the price line is toggled off!
                     y1: {
                         type: 'linear',
-                        display: 'auto',
+                        display: 'auto', // Disappears when price toggle is clicked off
                         position: 'right',
                         title: { display: true, text: 'Price ($)', color: '#48bb78', font: {weight: 'bold'} },
                         grid: { drawOnChartArea: false }, 
