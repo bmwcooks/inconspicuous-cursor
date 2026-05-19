@@ -482,6 +482,29 @@
         }
     });
 
+    // ==========================================
+    // TIMEZONE-SAFE DATE FORMATTER
+    // ==========================================
+    function safeDate(dStr) {
+        if (!dStr) return "";
+        let cleanStr = dStr.split('T')[0].split(' ')[0]; // Strip time if exists
+        
+        // Handle YYYY-MM-DD
+        if (cleanStr.includes('-')) {
+            let parts = cleanStr.split('-');
+            if (parts[0].length === 4) {
+                return parseInt(parts[1]) + '/' + parseInt(parts[2]) + '/' + parts[0];
+            }
+        }
+        // Handle MM/DD/YYYY
+        if (cleanStr.includes('/')) {
+            let parts = cleanStr.split('/');
+            return parseInt(parts[0]) + '/' + parseInt(parts[1]) + '/' + parts[2];
+        }
+        // Fallback
+        return new Date(dStr).toLocaleDateString();
+    }
+
     const cardDatabase = {
         "2025 POKEMON PRE EN-PRISMATIC EVOLUTIONS 161 UMBREON EX SPECIAL ILLUSTRATION RARE": { cert: "107699980", image: "https://den-cards.pokellector.com/407/Umbreon-ex.PRE.161.55456.png" },
         "2026 POKEMON POR EN-PERFECT ORDER 095 ESPURR ILLUSTRATION RARE": { cert: "155430323", image: "https://den-cards.pokellector.com/429/Espurr.POR.95.61135.png" },
@@ -769,12 +792,10 @@
         const dataArray = currentDisplayData;
         if (dataArray.length === 0) return;
 
-        // Today's Stats (Delta of the very last element in the array)
         const latestDay = dataArray[dataArray.length - 1];
         const todayTotalAdded = latestDay.deltaTotal || 0;
         const today10sAdded = latestDay.delta10 || 0;
 
-        // Period Stats (Sum of all deltas in the array)
         const periodTotalAdded = dataArray.reduce((sum, item) => sum + item.deltaTotal, 0);
         const period10sAdded = dataArray.reduce((sum, item) => sum + item.delta10, 0);
         
@@ -783,7 +804,6 @@
             periodGemRate = ((period10sAdded / periodTotalAdded) * 100).toFixed(1) + "%";
         }
 
-        // Overall Stats
         const latestTotal = parseInt(latestDay['Total Pop']) || 0;
         const latest10s = parseInt(latestDay['PSA 10 Pop']) || 0;
         
@@ -937,7 +957,8 @@
                 let pullDateStr = row[0] ? row[0].toString().trim() : "";
                 if (!pullDateStr) return;
                 
-                let cleanDate = new Date(pullDateStr).toLocaleDateString();
+                // USE SAFE DATE TO STRIP TIMEZONE OFFSETS
+                let cleanDate = safeDate(pullDateStr);
 
                 let pricesForThisRun = [];
                 for(let i = 2; i < row.length; i += 2) {
@@ -955,7 +976,8 @@
             });
 
             priceTrendData = labels.map(labelDate => {
-                let normalizedLabel = new Date(labelDate).toLocaleDateString();
+                // USE SAFE DATE TO STRIP TIMEZONE OFFSETS
+                let normalizedLabel = safeDate(labelDate);
                 return allHistoricalAverages[normalizedLabel] !== undefined ? allHistoricalAverages[normalizedLabel] : null;
             });
         }
