@@ -179,10 +179,10 @@
             margin: 0; 
         }
 
-        /* Summary Cards CSS */
+        /* Summary Cards CSS - UPDATED TO 3 COLUMNS */
         .summary-container {
             display: grid; 
-            grid-template-columns: repeat(4, 1fr);
+            grid-template-columns: repeat(3, 1fr);
             gap: 15px;
             margin-bottom: 30px;
         }
@@ -411,8 +411,20 @@
 
         <div class="summary-container">
             <div class="summary-card">
+                <h4>Today Added (Total)</h4>
+                <p class="value" id="statTodayTotal">0</p>
+            </div>
+            <div class="summary-card">
                 <h4>Period Added (Total)</h4>
                 <p class="value" id="statPeriodTotal">0</p>
+            </div>
+            <div class="summary-card">
+                <h4>Current Overall Gem Rate</h4>
+                <p class="value" id="statOverallGem">0%</p>
+            </div>
+            <div class="summary-card accent-red">
+                <h4>Today Added (PSA 10s)</h4>
+                <p class="value" id="statToday10s">0</p>
             </div>
             <div class="summary-card accent-red">
                 <h4>Period Added (PSA 10s)</h4>
@@ -421,10 +433,6 @@
             <div class="summary-card accent-red">
                 <h4>Period Gem Rate</h4>
                 <p class="value" id="statPeriodGem">0%</p>
-            </div>
-            <div class="summary-card">
-                <h4>Current Overall Gem Rate</h4>
-                <p class="value" id="statOverallGem">0%</p>
             </div>
         </div>
 
@@ -761,6 +769,12 @@
         const dataArray = currentDisplayData;
         if (dataArray.length === 0) return;
 
+        // Today's Stats (Delta of the very last element in the array)
+        const latestDay = dataArray[dataArray.length - 1];
+        const todayTotalAdded = latestDay.deltaTotal || 0;
+        const today10sAdded = latestDay.delta10 || 0;
+
+        // Period Stats (Sum of all deltas in the array)
         const periodTotalAdded = dataArray.reduce((sum, item) => sum + item.deltaTotal, 0);
         const period10sAdded = dataArray.reduce((sum, item) => sum + item.delta10, 0);
         
@@ -769,7 +783,7 @@
             periodGemRate = ((period10sAdded / periodTotalAdded) * 100).toFixed(1) + "%";
         }
 
-        const latestDay = dataArray[dataArray.length - 1];
+        // Overall Stats
         const latestTotal = parseInt(latestDay['Total Pop']) || 0;
         const latest10s = parseInt(latestDay['PSA 10 Pop']) || 0;
         
@@ -778,6 +792,8 @@
             overallGemRate = ((latest10s / latestTotal) * 100).toFixed(1) + "%";
         }
 
+        document.getElementById('statTodayTotal').innerText = `+${todayTotalAdded}`;
+        document.getElementById('statToday10s').innerText = `+${today10sAdded}`;
         document.getElementById('statPeriodTotal').innerText = `+${periodTotalAdded}`;
         document.getElementById('statPeriod10s').innerText = `+${period10sAdded}`;
         document.getElementById('statPeriodGem').innerText = periodGemRate;
@@ -895,7 +911,6 @@
         let psa10Data = [];
         let priceTrendData = []; 
 
-        // POPULATION DATA PARSER
         if (isGrowthMode && dataArray.length > 0) {
             let baselineTotal = parseInt(dataArray[0]['Total Pop']) || 0;
             let baseline10 = parseInt(dataArray[0]['PSA 10 Pop']) || 0;
@@ -909,7 +924,6 @@
         const deltaTotalData = dataArray.map(item => item.deltaTotal);
         const delta10Data = dataArray.map(item => item.delta10);
 
-        // PRICE DATA PARSER (Shared by both charts now)
         const dbEntry = getCardDatabaseEntry(currentCardDetails);
         if (dbEntry && dbEntry.cert && priceData && priceData.length > 0) {
             const certNumber = dbEntry.cert;
@@ -946,9 +960,6 @@
             });
         }
 
-        // ==========================================
-        // CHART 1: GRADING SPEED + PRICE
-        // ==========================================
         let speedDatasets = [
             { 
                 label: 'Total Cards Graded', 
@@ -958,7 +969,7 @@
                 borderWidth: 2, 
                 fill: false, 
                 tension: 0.1,
-                yAxisID: 'y', // Left axis
+                yAxisID: 'y',
                 datalabels: {
                     color: '#1A365D',
                     align: 'top',
@@ -975,7 +986,7 @@
                 borderWidth: 2, 
                 fill: false, 
                 tension: 0.1,
-                yAxisID: 'y', // Left axis
+                yAxisID: 'y',
                 datalabels: {
                     color: '#e53e3e',
                     align: 'bottom',
@@ -996,7 +1007,7 @@
                 fill: false, 
                 tension: 0.1,
                 spanGaps: true, 
-                yAxisID: 'y1', // Right axis
+                yAxisID: 'y1',
                 datalabels: { display: false },
                 pointRadius: 4,
                 pointBackgroundColor: '#fff',
@@ -1015,11 +1026,10 @@
                 responsive: true, 
                 maintainAspectRatio: false,
                 layout: { padding: { top: 25, right: 20, left: 20, bottom: 20 } },
-                interaction: { mode: 'index', intersect: false }, // Syncs tooltips vertically
+                interaction: { mode: 'index', intersect: false },
                 plugins: {
                     datalabels: {
                         display: function(context) { 
-                            // Only show datalabels for pop numbers, not the price line
                             if (context.dataset.label === 'Market Avg Price ($)') return false;
                             return context.dataset.data[context.dataIndex] > 0; 
                         }
@@ -1034,7 +1044,7 @@
                     },
                     y1: {
                         type: 'linear',
-                        display: 'auto', // Disappears when price toggle is clicked off
+                        display: 'auto',
                         position: 'right',
                         title: { display: true, text: 'Price ($)', color: '#48bb78', font: {weight: 'bold'} },
                         grid: { drawOnChartArea: false }, 
@@ -1048,9 +1058,6 @@
             }
         });
 
-        // ==========================================
-        // CHART 2: TOTAL POPULATION + PRICE
-        // ==========================================
         let totalDatasets = [
             { 
                 label: 'Total Pop', 
@@ -1060,7 +1067,7 @@
                 borderWidth: 2, 
                 fill: true, 
                 tension: 0.1,
-                yAxisID: 'y', // Left axis
+                yAxisID: 'y',
                 datalabels: { display: false } 
             },
             { 
@@ -1071,7 +1078,7 @@
                 borderWidth: 2, 
                 fill: false, 
                 tension: 0.1, 
-                yAxisID: 'y', // Left axis
+                yAxisID: 'y',
                 datalabels: { display: false } 
             }
         ];
@@ -1086,7 +1093,7 @@
                 fill: false, 
                 tension: 0.1,
                 spanGaps: true, 
-                yAxisID: 'y1', // Right axis
+                yAxisID: 'y1',
                 datalabels: { display: false },
                 pointRadius: 4,
                 pointBackgroundColor: '#fff',
@@ -1114,7 +1121,7 @@
                     },
                     y1: {
                         type: 'linear',
-                        display: 'auto', // Disappears when price toggle is clicked off
+                        display: 'auto',
                         position: 'right',
                         title: { display: true, text: 'Price ($)', color: '#48bb78', font: {weight: 'bold'} },
                         grid: { drawOnChartArea: false }, 
