@@ -154,7 +154,7 @@
             margin-top: 20px;
         }
         
-        /* NEW: Dashboard Title Header with Image */
+        /* Dashboard Title Header with Image */
         .dashboard-header-container {
             display: flex;
             align-items: center;
@@ -167,7 +167,7 @@
             border: 1px solid #eaeaea;
         }
         #cardDisplayImage {
-            height: 120px; /* Small enough not to push down, large enough to see */
+            height: 120px; 
             width: auto;
             border-radius: 5px;
             box-shadow: 2px 2px 8px rgba(0,0,0,0.15);
@@ -432,7 +432,7 @@
             <div class="chart-wrapper">
                 <div class="chart-header">
                     <div class="chart-header-left">
-                        <h3 id="totalChartTitle">Cumulative Total Population</h3>
+                        <h3 id="totalChartTitle">Cumulative Total Population & Market Price</h3>
                         <button class="toggle-btn" id="modeToggleBtn" onclick="toggleGrowthMode()">Mode: Absolute Numbers</button>
                     </div>
                     <button class="export-btn" onclick="exportChart('totalPopChart', 'Cumulative_Pop')">Download PNG</button>
@@ -475,7 +475,7 @@
     });
 
     // ==========================================
-    // UPDATED: COMBINED CARD DATABASE
+    // COMBINED CARD DATABASE
     // ==========================================
     const cardDatabase = {
         "2025 POKEMON PRE EN-PRISMATIC EVOLUTIONS 161 UMBREON EX SPECIAL ILLUSTRATION RARE": { cert: "107699980", image: "https://den-cards.pokellector.com/407/Umbreon-ex.PRE.161.55456.png" },
@@ -517,7 +517,6 @@
     let currentCardDetails = "";
     let isGrowthMode = false; 
 
-    // NEW HELPER: Fetch entry from database using fuzzy matching
     function getCardDatabaseEntry(selectedName) {
         const normalizedSelected = selectedName.trim().replace(/\s+/g, ' ').toUpperCase();
         for (let key in cardDatabase) {
@@ -553,6 +552,7 @@
             complete: function(results) {
                 priceData = results.data;
                 if (currentCardDetails) updateRecentSales();
+                if (currentCardDetails && currentDisplayData.length > 0) renderCharts(); // Refresh chart immediately when price loads
             }
         });
     });
@@ -664,7 +664,6 @@
                 
                 document.getElementById('displayCardName').innerText = currentCardDetails;
                 
-                // NEW: Update Image
                 const dbEntry = getCardDatabaseEntry(currentCardDetails);
                 const imgElement = document.getElementById('cardDisplayImage');
                 if (dbEntry && dbEntry.image) {
@@ -752,11 +751,11 @@
         if (isGrowthMode) {
             btn.innerText = "Mode: Period Growth";
             btn.style.backgroundColor = "#bee3f8";
-            title.innerText = "Cumulative Growth in Period";
+            title.innerText = "Cumulative Growth in Period & Market Price";
         } else {
             btn.innerText = "Mode: Absolute Numbers";
             btn.style.backgroundColor = "#edf2f7";
-            title.innerText = "Cumulative Total Population";
+            title.innerText = "Cumulative Total Population & Market Price";
         }
         if (currentDisplayData.length > 0) renderCharts(); 
     }
@@ -802,7 +801,6 @@
             return;
         }
 
-        // Use the new helper function
         const dbEntry = getCardDatabaseEntry(currentCardDetails);
         
         if (!dbEntry || !dbEntry.cert) {
@@ -895,10 +893,14 @@
         const dataArray = currentDisplayData;
         if (dataArray.length === 0) return;
 
+        // X-Axis Labels (Dates from the Population CSV)
         const labels = dataArray.map(item => item.Date);
+        
         let totalPopData = [];
         let psa10Data = [];
+        let priceTrendData = []; // NEW: Array for the Price Overlay
 
+        // --- POPULATION DATA PARSING ---
         if (isGrowthMode && dataArray.length > 0) {
             let baselineTotal = parseInt(dataArray[0]['Total Pop']) || 0;
             let baseline10 = parseInt(dataArray[0]['PSA 10 Pop']) || 0;
@@ -912,6 +914,49 @@
         const deltaTotalData = dataArray.map(item => item.deltaTotal);
         const delta10Data = dataArray.map(item => item.delta10);
 
+        // --- NEW: HISTORICAL PRICE OVERLAY AGGREGATOR ---
+        const dbEntry = getCardDatabaseEntry(currentCardDetails);
+        if (dbEntry && dbEntry.cert && priceData && priceData.length > 0) {
+            const certNumber = dbEntry.cert;
+            
+            // Step 1: Find all price rows for this specific card
+            let matchingRows = priceData.filter(row => {
+                return row && row.length >= 2 && row[1].toString().trim() === certNumber.toString().trim();
+            });
+
+            // Step 2: Calculate the exact Average Price for EVERY available pull date
+            let allHistoricalAverages = {};
+            matchingRows.forEach(row => {
+                let pullDateStr = row[0] ? row[0].toString().trim() : "";
+                if (!pullDateStr) return;
+                
+                // Standardize the date so it exactly matches the X-Axis label format
+                let cleanDate = new Date(pullDateStr).toLocaleDateString();
+
+                let pricesForThisRun = [];
+                for(let i = 2; i < row.length; i += 2) {
+                    let priceStr = row[i+1] ? row[i+1].toString().trim() : "";
+                    if (priceStr !== "" && priceStr.includes('$')) {
+                        let priceVal = parseFloat(priceStr.replace(/[^0-9.-]+/g,""));
+                        pricesForThisRun.push(priceVal);
+                    }
+                }
+                
+                if (pricesForThisRun.length > 0) {
+                    let sum = pricesForThisRun.reduce((a, b) => a + b, 0);
+                    allHistoricalAverages[cleanDate] = sum / pricesForThisRun.length;
+                }
+            });
+
+            // Step 3: Map the average price directly to the chart's X-axis dates
+            priceTrendData = labels.map(labelDate => {
+                let normalizedLabel = new Date(labelDate).toLocaleDateString();
+                // Return the price if we have it for that day, otherwise return null
+                return allHistoricalAverages[normalizedLabel] !== undefined ? allHistoricalAverages[normalizedLabel] : null;
+            });
+        }
+
+        // --- CHART 1: GRADING SPEED ---
         if (mySpeedChart) mySpeedChart.destroy(); 
         mySpeedChart = new Chart(document.getElementById('gradingSpeedChart').getContext('2d'), {
             type: 'line',
@@ -964,17 +1009,86 @@
             }
         });
 
+        // --- CHART 2: DUAL AXIS TOTAL POPULATION & PRICE ---
         if (myTotalChart) myTotalChart.destroy();
+        
+        let datasets = [
+            { 
+                label: 'Total Pop', 
+                data: totalPopData, 
+                borderColor: '#1A365D', 
+                backgroundColor: 'rgba(26, 54, 93, 0.1)', 
+                borderWidth: 2, 
+                fill: true, 
+                tension: 0.1,
+                yAxisID: 'y', // Links to Left Axis
+                datalabels: { display: false } 
+            },
+            { 
+                label: 'PSA 10 Pop', 
+                data: psa10Data, 
+                borderColor: '#e53e3e', 
+                backgroundColor: 'transparent', 
+                borderWidth: 2, 
+                fill: false, 
+                tension: 0.1, 
+                yAxisID: 'y', // Links to Left Axis
+                datalabels: { display: false } 
+            }
+        ];
+
+        // Only add the Price dataset if we successfully mapped price data
+        if (priceTrendData.some(val => val !== null)) {
+            datasets.push({
+                label: 'Market Avg Price ($)', 
+                data: priceTrendData, 
+                borderColor: '#48bb78', // Green for money
+                backgroundColor: '#48bb78',
+                borderWidth: 3, 
+                fill: false, 
+                tension: 0.1,
+                spanGaps: true, // IMPORTANT: Connects line across days with no price pull
+                yAxisID: 'y1', // Links to Right Axis
+                datalabels: { display: false },
+                pointRadius: 4,
+                pointBackgroundColor: '#fff',
+                pointBorderWidth: 2
+            });
+        }
+
         myTotalChart = new Chart(document.getElementById('totalPopChart').getContext('2d'), {
             type: 'line',
             data: {
                 labels: labels,
-                datasets: [
-                    { label: 'Total Pop', data: totalPopData, borderColor: '#1A365D', backgroundColor: 'rgba(26, 54, 93, 0.1)', borderWidth: 2, fill: true, tension: 0.1, datalabels: { display: false } },
-                    { label: 'PSA 10 Pop', data: psa10Data, borderColor: '#e53e3e', backgroundColor: 'transparent', borderWidth: 2, fill: false, tension: 0.1, datalabels: { display: false } }
-                ]
+                datasets: datasets
             },
-            options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false } }
+            options: { 
+                responsive: true, 
+                maintainAspectRatio: false, 
+                interaction: { mode: 'index', intersect: false },
+                scales: {
+                    // Left Axis: Population
+                    y: {
+                        type: 'linear',
+                        display: true,
+                        position: 'left',
+                        title: { display: true, text: 'Population Count', color: '#1A365D', font: {weight: 'bold'} }
+                    },
+                    // Right Axis: Price
+                    y1: {
+                        type: 'linear',
+                        display: true,
+                        position: 'right',
+                        title: { display: true, text: 'Price ($)', color: '#48bb78', font: {weight: 'bold'} },
+                        grid: { drawOnChartArea: false }, // Prevent horizontal grid lines from overlapping
+                        ticks: {
+                            callback: function(value) {
+                                return '$' + value; // Add dollar sign to axis numbers
+                            }
+                        }
+                    }
+                }
+            }
         });
     }
 
