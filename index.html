@@ -179,7 +179,7 @@
             margin: 0; 
         }
 
-        /* Summary Cards CSS - UPDATED TO 3 COLUMNS */
+        /* Summary Cards CSS - 3 COLUMNS */
         .summary-container {
             display: grid; 
             grid-template-columns: repeat(3, 1fr);
@@ -390,6 +390,11 @@
             <input type="date" id="endDate">
             <button onclick="applyCustomDateRange()" style="background-color: #2b6cb0;">Apply Range</button>
         </div>
+
+        <div class="control-group">
+            <label><strong>Set Tools:</strong></label>
+            <button onclick="loadSetAggregate()" style="background-color: #805ad5;">📊 View Aggregate Data for Entire Set</button>
+        </div>
     </div>
 
     <div id="mainDashboard">
@@ -489,19 +494,16 @@
         if (!dStr) return "";
         let cleanStr = dStr.split('T')[0].split(' ')[0]; // Strip time if exists
         
-        // Handle YYYY-MM-DD
         if (cleanStr.includes('-')) {
             let parts = cleanStr.split('-');
             if (parts[0].length === 4) {
                 return parseInt(parts[1]) + '/' + parseInt(parts[2]) + '/' + parts[0];
             }
         }
-        // Handle MM/DD/YYYY
         if (cleanStr.includes('/')) {
             let parts = cleanStr.split('/');
             return parseInt(parts[0]) + '/' + parseInt(parts[1]) + '/' + parts[2];
         }
-        // Fallback
         return new Date(dStr).toLocaleDateString();
     }
 
@@ -544,6 +546,10 @@
     let myTotalChart = null;
     let currentCardDetails = "";
     let isGrowthMode = false; 
+
+    // NEW: STATE VARIABLES FOR SET AGGREGATION
+    let currentSetDetails = null;
+    let isSetAggregateMode = false;
 
     function getCardDatabaseEntry(selectedName) {
         const normalizedSelected = selectedName.trim().replace(/\s+/g, ' ').toUpperCase();
@@ -630,6 +636,7 @@
             btn.onclick = () => {
                 document.querySelectorAll('#yearTabs .nav-btn').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
+                currentSetDetails = null; // Reset set
                 renderGameTabs(year);
                 document.getElementById('setTabs').innerHTML = '<span style="font-size: 13px; color: #718096;">Select a game first...</span>';
                 document.getElementById('cardList').style.display = 'none';
@@ -650,6 +657,7 @@
             btn.onclick = () => {
                 document.querySelectorAll('#gameTabs .nav-btn').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
+                currentSetDetails = null; // Reset set
                 renderSetTabs(selectedYear, game);
                 document.getElementById('cardList').style.display = 'none';
             };
@@ -669,6 +677,7 @@
             btn.onclick = () => {
                 document.querySelectorAll('#setTabs .nav-btn').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
+                currentSetDetails = { year: year, game: game, set: set }; // Track active set!
                 renderCardList(year, game, set);
             };
             container.appendChild(btn);
@@ -688,6 +697,8 @@
             div.onclick = () => {
                 document.querySelectorAll('.card-item').forEach(c => c.classList.remove('active'));
                 div.classList.add('active');
+                
+                isSetAggregateMode = false; // Disable aggregate mode
                 currentCardDetails = card;
                 
                 document.getElementById('displayCardName').innerText = currentCardDetails;
@@ -707,6 +718,86 @@
                 updateChart(0); 
             };
             container.appendChild(div);
+        });
+    }
+
+    // ==========================================
+    // NEW: DATA ENGINE FOR ENTIRE SETS
+    // ==========================================
+    function loadSetAggregate() {
+        if (!currentSetDetails || !currentSetDetails.set) {
+            alert("Please select a specific Set from the tabs above first.");
+            return;
+        }
+
+        isSetAggregateMode = true;
+        currentCardDetails = "SET AGGREGATE: " + currentSetDetails.set;
+        
+        // Update Title and Hide Image
+        document.getElementById('displayCardName').innerText = currentCardDetails;
+        document.getElementById('cardDisplayImage').style.display = 'none';
+        
+        // Deselect any highlighted single card in the list
+        document.querySelectorAll('.card-item').forEach(c => c.classList.remove('active'));
+        document.getElementById('mainDashboard').style.display = 'block';
+
+        prepareSetData();
+        updateChart(0);
+    }
+
+    function prepareSetData() {
+        if (!currentSetDetails || !currentSetDetails.set) return;
+        const { year, game, set } = currentSetDetails;
+        const cardsInSet = Array.from(dataHierarchy[year][game][set]);
+        
+        // Grab only rows that belong to cards in this set
+        let setRawData = rawData.filter(item => cardsInSet.includes(item['Card Details']));
+        
+        // Extract a timeline of all unique dates any card was pulled
+        let uniqueDates = [...new Set(setRawData.map(item => item.Date))].sort((a, b) => new Date(a) - new Date(b));
+        
+        // Create a running tracker so if a card isn't pulled on day X, it retains day X-1's value
+        let cardTrackers = {}; 
+        cardsInSet.forEach(c => cardTrackers[c] = { total: 0, psa10: 0 });
+        
+        allCardData = [];
+        
+        uniqueDates.forEach(date => {
+            let recordsOnDate = setRawData.filter(item => item.Date === date);
+            
+            // Update trackers for any card pulled on this specific date
+            recordsOnDate.forEach(record => {
+                cardTrackers[record['Card Details']].total = parseInt(record['Total Pop']) || 0;
+                cardTrackers[record['Card Details']].psa10 = parseInt(record['PSA 10 Pop']) || 0;
+            });
+            
+            // Sum all current trackers for the combined daily total
+            let dayTotal = 0;
+            let day10 = 0;
+            for (let c in cardTrackers) {
+                dayTotal += cardTrackers[c].total;
+                day10 += cardTrackers[c].psa10;
+            }
+            
+            allCardData.push({
+                Date: date,
+                'Total Pop': dayTotal,
+                'PSA 10 Pop': day10,
+                'Card Details': 'SET AGGREGATE'
+            });
+        });
+        
+        // Calculate the Deltas (Growth)
+        allCardData.forEach((item, index) => {
+            if (index === 0) {
+                item.deltaTotal = 0;
+                item.delta10 = 0;
+            } else {
+                let prevTotal = allCardData[index-1]['Total Pop'];
+                let prev10 = allCardData[index-1]['PSA 10 Pop'];
+                item.deltaTotal = item['Total Pop'] - prevTotal;
+                item.delta10 = item['PSA 10 Pop'] - prev10;
+            }
         });
     }
 
@@ -829,6 +920,12 @@
         badge.innerText = '';
         confBadge.style.display = 'none';
 
+        // Bypass Price Logic entirely if in Set Aggregate Mode
+        if (isSetAggregateMode) {
+            container.innerHTML = '<div class="sales-placeholder">Market Average Data is disabled in Set Aggregate Mode. Please select an individual card to view pricing.</div>';
+            return;
+        }
+
         if (!priceData || priceData.length === 0) {
             container.innerHTML = '<div class="sales-placeholder">Upload Price Data (CSV) to view recent sales.</div>';
             return;
@@ -944,42 +1041,43 @@
         const deltaTotalData = dataArray.map(item => item.deltaTotal);
         const delta10Data = dataArray.map(item => item.delta10);
 
-        const dbEntry = getCardDatabaseEntry(currentCardDetails);
-        if (dbEntry && dbEntry.cert && priceData && priceData.length > 0) {
-            const certNumber = dbEntry.cert;
-            
-            let matchingRows = priceData.filter(row => {
-                return row && row.length >= 2 && row[1].toString().trim() === certNumber.toString().trim();
-            });
-
-            let allHistoricalAverages = {};
-            matchingRows.forEach(row => {
-                let pullDateStr = row[0] ? row[0].toString().trim() : "";
-                if (!pullDateStr) return;
+        // Bypass Price Mapping if in Set Aggregate Mode
+        if (!isSetAggregateMode) {
+            const dbEntry = getCardDatabaseEntry(currentCardDetails);
+            if (dbEntry && dbEntry.cert && priceData && priceData.length > 0) {
+                const certNumber = dbEntry.cert;
                 
-                // USE SAFE DATE TO STRIP TIMEZONE OFFSETS
-                let cleanDate = safeDate(pullDateStr);
+                let matchingRows = priceData.filter(row => {
+                    return row && row.length >= 2 && row[1].toString().trim() === certNumber.toString().trim();
+                });
 
-                let pricesForThisRun = [];
-                for(let i = 2; i < row.length; i += 2) {
-                    let priceStr = row[i+1] ? row[i+1].toString().trim() : "";
-                    if (priceStr !== "" && priceStr.includes('$')) {
-                        let priceVal = parseFloat(priceStr.replace(/[^0-9.-]+/g,""));
-                        pricesForThisRun.push(priceVal);
+                let allHistoricalAverages = {};
+                matchingRows.forEach(row => {
+                    let pullDateStr = row[0] ? row[0].toString().trim() : "";
+                    if (!pullDateStr) return;
+                    
+                    let cleanDate = safeDate(pullDateStr);
+
+                    let pricesForThisRun = [];
+                    for(let i = 2; i < row.length; i += 2) {
+                        let priceStr = row[i+1] ? row[i+1].toString().trim() : "";
+                        if (priceStr !== "" && priceStr.includes('$')) {
+                            let priceVal = parseFloat(priceStr.replace(/[^0-9.-]+/g,""));
+                            pricesForThisRun.push(priceVal);
+                        }
                     }
-                }
-                
-                if (pricesForThisRun.length > 0) {
-                    let sum = pricesForThisRun.reduce((a, b) => a + b, 0);
-                    allHistoricalAverages[cleanDate] = sum / pricesForThisRun.length;
-                }
-            });
+                    
+                    if (pricesForThisRun.length > 0) {
+                        let sum = pricesForThisRun.reduce((a, b) => a + b, 0);
+                        allHistoricalAverages[cleanDate] = sum / pricesForThisRun.length;
+                    }
+                });
 
-            priceTrendData = labels.map(labelDate => {
-                // USE SAFE DATE TO STRIP TIMEZONE OFFSETS
-                let normalizedLabel = safeDate(labelDate);
-                return allHistoricalAverages[normalizedLabel] !== undefined ? allHistoricalAverages[normalizedLabel] : null;
-            });
+                priceTrendData = labels.map(labelDate => {
+                    let normalizedLabel = safeDate(labelDate);
+                    return allHistoricalAverages[normalizedLabel] !== undefined ? allHistoricalAverages[normalizedLabel] : null;
+                });
+            }
         }
 
         let speedDatasets = [
@@ -1019,6 +1117,7 @@
             }
         ];
 
+        // Only render the green price line if we have valid price data
         if (priceTrendData.some(val => val !== null)) {
             speedDatasets.push({
                 label: 'Market Avg Price ($)', 
