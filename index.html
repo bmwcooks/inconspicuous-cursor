@@ -7,7 +7,9 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
-    <script src="database.js"></script>
+    
+    <script src="database.js"></script> 
+    
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -393,8 +395,11 @@
         </div>
 
         <div class="control-group">
-            <label><strong>Set Tools:</strong></label>
-            <button onclick="loadSetAggregate()" style="background-color: #805ad5;">📊 View Aggregate Data for Entire Set</button>
+            <label><strong>Advanced Tools:</strong></label>
+            <button onclick="loadSetAggregate()" style="background-color: #805ad5;">📊 Aggregate Active Set</button>
+            <button id="addCompareBtn" onclick="addToCompare()" style="background-color: #ed8936; margin-left: 10px;">➕ Add to Compare (0/3)</button>
+            <button id="viewCompareBtn" onclick="viewCompare()" style="background-color: #dd6b20; display: none;">📈 View Comparison</button>
+            <button id="clearCompareBtn" onclick="clearCompare()" style="background-color: #e53e3e; display: none;">❌ Clear</button>
         </div>
     </div>
 
@@ -518,11 +523,14 @@
     let currentCardDetails = "";
     let isGrowthMode = false; 
 
-    // NEW: STATE VARIABLES FOR SET AGGREGATION
+    // STATE VARIABLES FOR SET AGGREGATION & MULTI-COMPARE
     let currentSetDetails = null;
     let isSetAggregateMode = false;
+    let isCompareMode = false;
+    let comparisonList = [];
 
     function getCardDatabaseEntry(selectedName) {
+        if (!cardDatabase) return null; // Safety check in case database.js fails to load
         const normalizedSelected = selectedName.trim().replace(/\s+/g, ' ').toUpperCase();
         for (let key in cardDatabase) {
             let normalizedKey = key.trim().replace(/\s+/g, ' ').toUpperCase();
@@ -607,7 +615,7 @@
             btn.onclick = () => {
                 document.querySelectorAll('#yearTabs .nav-btn').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
-                currentSetDetails = null; // Reset set
+                currentSetDetails = null; 
                 renderGameTabs(year);
                 document.getElementById('setTabs').innerHTML = '<span style="font-size: 13px; color: #718096;">Select a game first...</span>';
                 document.getElementById('cardList').style.display = 'none';
@@ -628,7 +636,7 @@
             btn.onclick = () => {
                 document.querySelectorAll('#gameTabs .nav-btn').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
-                currentSetDetails = null; // Reset set
+                currentSetDetails = null; 
                 renderSetTabs(selectedYear, game);
                 document.getElementById('cardList').style.display = 'none';
             };
@@ -648,7 +656,7 @@
             btn.onclick = () => {
                 document.querySelectorAll('#setTabs .nav-btn').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
-                currentSetDetails = { year: year, game: game, set: set }; // Track active set!
+                currentSetDetails = { year: year, game: game, set: set }; 
                 renderCardList(year, game, set);
             };
             container.appendChild(btn);
@@ -669,7 +677,9 @@
                 document.querySelectorAll('.card-item').forEach(c => c.classList.remove('active'));
                 div.classList.add('active');
                 
-                isSetAggregateMode = false; // Disable aggregate mode
+                // Turn off master features when a single card is clicked
+                isSetAggregateMode = false; 
+                isCompareMode = false;
                 currentCardDetails = card;
                 
                 document.getElementById('displayCardName').innerText = currentCardDetails;
@@ -693,7 +703,111 @@
     }
 
     // ==========================================
-    // NEW: DATA ENGINE FOR ENTIRE SETS
+    // MULTI-CARD COMPARISON LOGIC
+    // ==========================================
+    function addToCompare() {
+        if (isSetAggregateMode || isCompareMode) {
+            alert("You can only add individual cards to the comparison. Please select a single card from the list first.");
+            return;
+        }
+        if (!currentCardDetails || currentCardDetails === "") {
+            alert("Please select a card first.");
+            return;
+        }
+        if (comparisonList.includes(currentCardDetails)) {
+            alert("This card is already in the comparison list!");
+            return;
+        }
+        if (comparisonList.length >= 3) {
+            alert("You can only compare up to 3 cards at once. Please Clear the comparison to start over.");
+            return;
+        }
+        
+        comparisonList.push(currentCardDetails);
+        document.getElementById('addCompareBtn').innerText = `➕ Add to Compare (${comparisonList.length}/3)`;
+        
+        if (comparisonList.length > 0) {
+            document.getElementById('viewCompareBtn').style.display = 'inline-block';
+            document.getElementById('clearCompareBtn').style.display = 'inline-block';
+        }
+    }
+
+    function clearCompare() {
+        comparisonList = [];
+        document.getElementById('addCompareBtn').innerText = `➕ Add to Compare (0/3)`;
+        document.getElementById('viewCompareBtn').style.display = 'none';
+        document.getElementById('clearCompareBtn').style.display = 'none';
+        
+        if (isCompareMode) {
+            isCompareMode = false;
+            document.getElementById('mainDashboard').style.display = 'none';
+        }
+    }
+
+    function viewCompare() {
+        if (comparisonList.length < 2) {
+            alert("Please add at least 2 cards to the comparison list first.");
+            return;
+        }
+        
+        isCompareMode = true;
+        isSetAggregateMode = false;
+        
+        currentCardDetails = "COMPARING " + comparisonList.length + " CARDS";
+        document.getElementById('displayCardName').innerText = currentCardDetails;
+        document.getElementById('cardDisplayImage').style.display = 'none';
+        
+        document.querySelectorAll('.card-item').forEach(c => c.classList.remove('active'));
+        document.getElementById('mainDashboard').style.display = 'block';
+
+        prepareCompareData();
+        updateChart(0);
+    }
+
+    function prepareCompareData() {
+        allCardData = [];
+        let rawCompareData = rawData.filter(item => comparisonList.includes(item['Card Details']));
+        let uniqueDates = [...new Set(rawCompareData.map(item => item.Date))].sort((a, b) => new Date(a) - new Date(b));
+
+        let trackers = {};
+        comparisonList.forEach(c => trackers[c] = { total: 0, psa10: 0 });
+
+        uniqueDates.forEach(date => {
+            let rowObj = { Date: date, isCompare: true };
+            let recordsOnDate = rawCompareData.filter(item => item.Date === date);
+
+            recordsOnDate.forEach(record => {
+                let cName = record['Card Details'];
+                trackers[cName].total = parseInt(record['Total Pop']) || 0;
+                trackers[cName].psa10 = parseInt(record['PSA 10 Pop']) || 0;
+            });
+
+            comparisonList.forEach(c => {
+                rowObj[c + '_Total'] = trackers[c].total;
+                rowObj[c + '_PSA10'] = trackers[c].psa10;
+            });
+
+            allCardData.push(rowObj);
+        });
+
+        // Calculate independent growth deltas for each card
+        comparisonList.forEach(c => {
+            allCardData.forEach((item, index) => {
+                if (index === 0) {
+                    item[c + '_deltaTotal'] = 0;
+                    item[c + '_delta10'] = 0;
+                } else {
+                    let prevTotal = allCardData[index-1][c + '_Total'];
+                    let prev10 = allCardData[index-1][c + '_PSA10'];
+                    item[c + '_deltaTotal'] = item[c + '_Total'] - prevTotal;
+                    item[c + '_delta10'] = item[c + '_PSA10'] - prev10;
+                }
+            });
+        });
+    }
+
+    // ==========================================
+    // DATA ENGINE FOR ENTIRE SETS
     // ==========================================
     function loadSetAggregate() {
         if (!currentSetDetails || !currentSetDetails.set) {
@@ -702,13 +816,12 @@
         }
 
         isSetAggregateMode = true;
+        isCompareMode = false;
         currentCardDetails = "SET AGGREGATE: " + currentSetDetails.set;
         
-        // Update Title and Hide Image
         document.getElementById('displayCardName').innerText = currentCardDetails;
         document.getElementById('cardDisplayImage').style.display = 'none';
         
-        // Deselect any highlighted single card in the list
         document.querySelectorAll('.card-item').forEach(c => c.classList.remove('active'));
         document.getElementById('mainDashboard').style.display = 'block';
 
@@ -721,13 +834,9 @@
         const { year, game, set } = currentSetDetails;
         const cardsInSet = Array.from(dataHierarchy[year][game][set]);
         
-        // Grab only rows that belong to cards in this set
         let setRawData = rawData.filter(item => cardsInSet.includes(item['Card Details']));
-        
-        // Extract a timeline of all unique dates any card was pulled
         let uniqueDates = [...new Set(setRawData.map(item => item.Date))].sort((a, b) => new Date(a) - new Date(b));
         
-        // Create a running tracker so if a card isn't pulled on day X, it retains day X-1's value
         let cardTrackers = {}; 
         cardsInSet.forEach(c => cardTrackers[c] = { total: 0, psa10: 0 });
         
@@ -736,13 +845,11 @@
         uniqueDates.forEach(date => {
             let recordsOnDate = setRawData.filter(item => item.Date === date);
             
-            // Update trackers for any card pulled on this specific date
             recordsOnDate.forEach(record => {
                 cardTrackers[record['Card Details']].total = parseInt(record['Total Pop']) || 0;
                 cardTrackers[record['Card Details']].psa10 = parseInt(record['PSA 10 Pop']) || 0;
             });
             
-            // Sum all current trackers for the combined daily total
             let dayTotal = 0;
             let day10 = 0;
             for (let c in cardTrackers) {
@@ -758,7 +865,6 @@
             });
         });
         
-        // Calculate the Deltas (Growth)
         allCardData.forEach((item, index) => {
             if (index === 0) {
                 item.deltaTotal = 0;
@@ -854,20 +960,43 @@
         const dataArray = currentDisplayData;
         if (dataArray.length === 0) return;
 
-        const latestDay = dataArray[dataArray.length - 1];
-        const todayTotalAdded = latestDay.deltaTotal || 0;
-        const today10sAdded = latestDay.delta10 || 0;
+        let todayTotalAdded = 0;
+        let today10sAdded = 0;
+        let periodTotalAdded = 0;
+        let period10sAdded = 0;
+        let latestTotal = 0;
+        let latest10s = 0;
 
-        const periodTotalAdded = dataArray.reduce((sum, item) => sum + item.deltaTotal, 0);
-        const period10sAdded = dataArray.reduce((sum, item) => sum + item.delta10, 0);
+        const latestDay = dataArray[dataArray.length - 1];
+
+        // Complex calculation if comparing multiple cards
+        if (isCompareMode) {
+            comparisonList.forEach(c => {
+                todayTotalAdded += latestDay[c + '_deltaTotal'] || 0;
+                today10sAdded += latestDay[c + '_delta10'] || 0;
+                
+                periodTotalAdded += dataArray.reduce((sum, item) => sum + (item[c + '_deltaTotal'] || 0), 0);
+                period10sAdded += dataArray.reduce((sum, item) => sum + (item[c + '_delta10'] || 0), 0);
+
+                latestTotal += latestDay[c + '_Total'] || 0;
+                latest10s += latestDay[c + '_PSA10'] || 0;
+            });
+        } else {
+            // Standard calculation for Single Card or Set Aggregate
+            todayTotalAdded = latestDay.deltaTotal || 0;
+            today10sAdded = latestDay.delta10 || 0;
+
+            periodTotalAdded = dataArray.reduce((sum, item) => sum + item.deltaTotal, 0);
+            period10sAdded = dataArray.reduce((sum, item) => sum + item.delta10, 0);
+
+            latestTotal = parseInt(latestDay['Total Pop']) || 0;
+            latest10s = parseInt(latestDay['PSA 10 Pop']) || 0;
+        }
         
         let periodGemRate = "0.0%";
         if (periodTotalAdded > 0) {
             periodGemRate = ((period10sAdded / periodTotalAdded) * 100).toFixed(1) + "%";
         }
-
-        const latestTotal = parseInt(latestDay['Total Pop']) || 0;
-        const latest10s = parseInt(latestDay['PSA 10 Pop']) || 0;
         
         let overallGemRate = "0.0%";
         if (latestTotal > 0) {
@@ -891,9 +1020,8 @@
         badge.innerText = '';
         confBadge.style.display = 'none';
 
-        // Bypass Price Logic entirely if in Set Aggregate Mode
-        if (isSetAggregateMode) {
-            container.innerHTML = '<div class="sales-placeholder">Market Average Data is disabled in Set Aggregate Mode. Please select an individual card to view pricing.</div>';
+        if (isSetAggregateMode || isCompareMode) {
+            container.innerHTML = '<div class="sales-placeholder">Market Average Data is disabled in Multi-Card/Set modes. Please select an individual card to view pricing.</div>';
             return;
         }
 
@@ -995,233 +1123,191 @@
         if (dataArray.length === 0) return;
 
         const labels = dataArray.map(item => item.Date);
-        let totalPopData = [];
-        let psa10Data = [];
-        let priceTrendData = []; 
-
-        if (isGrowthMode && dataArray.length > 0) {
-            let baselineTotal = parseInt(dataArray[0]['Total Pop']) || 0;
-            let baseline10 = parseInt(dataArray[0]['PSA 10 Pop']) || 0;
-            totalPopData = dataArray.map(item => (parseInt(item['Total Pop']) || 0) - baselineTotal);
-            psa10Data = dataArray.map(item => (parseInt(item['PSA 10 Pop']) || 0) - baseline10);
-        } else {
-            totalPopData = dataArray.map(item => parseInt(item['Total Pop']) || 0);
-            psa10Data = dataArray.map(item => parseInt(item['PSA 10 Pop']) || 0);
-        }
         
-        const deltaTotalData = dataArray.map(item => item.deltaTotal);
-        const delta10Data = dataArray.map(item => item.delta10);
+        let speedDatasets = [];
+        let totalDatasets = [];
 
-        // Bypass Price Mapping if in Set Aggregate Mode
-        if (!isSetAggregateMode) {
-            const dbEntry = getCardDatabaseEntry(currentCardDetails);
-            if (dbEntry && dbEntry.cert && priceData && priceData.length > 0) {
-                const certNumber = dbEntry.cert;
-                
-                let matchingRows = priceData.filter(row => {
-                    return row && row.length >= 2 && row[1].toString().trim() === certNumber.toString().trim();
-                });
+        // ==========================================
+        // SCENARIO 1: COMPARE MODE (Multiple Cards)
+        // ==========================================
+        if (isCompareMode) {
+            // Three distinct color palettes for the overlapping cards
+            const compareColors = [
+                { total: '#1A365D', psa10: '#e53e3e', totalFill: 'rgba(26, 54, 93, 0.1)' },   // Card 1: Standard Blue / Red
+                { total: '#22543D', psa10: '#48BB78', totalFill: 'rgba(34, 84, 61, 0.1)' },   // Card 2: Dark Green / Light Green
+                { total: '#44337A', psa10: '#ED64A6', totalFill: 'rgba(68, 51, 122, 0.1)' }   // Card 3: Purple / Pink
+            ];
 
-                let allHistoricalAverages = {};
-                matchingRows.forEach(row => {
-                    let pullDateStr = row[0] ? row[0].toString().trim() : "";
-                    if (!pullDateStr) return;
-                    
-                    let cleanDate = safeDate(pullDateStr);
+            comparisonList.forEach((cName, idx) => {
+                let color = compareColors[idx];
+                let cTotalPop = [];
+                let cPsa10Pop = [];
+                let cDeltaTotal = dataArray.map(item => item[cName + '_deltaTotal']);
+                let cDelta10 = dataArray.map(item => item[cName + '_delta10']);
 
-                    let pricesForThisRun = [];
-                    for(let i = 2; i < row.length; i += 2) {
-                        let priceStr = row[i+1] ? row[i+1].toString().trim() : "";
-                        if (priceStr !== "" && priceStr.includes('$')) {
-                            let priceVal = parseFloat(priceStr.replace(/[^0-9.-]+/g,""));
-                            pricesForThisRun.push(priceVal);
-                        }
-                    }
-                    
-                    if (pricesForThisRun.length > 0) {
-                        let sum = pricesForThisRun.reduce((a, b) => a + b, 0);
-                        allHistoricalAverages[cleanDate] = sum / pricesForThisRun.length;
-                    }
-                });
-
-                priceTrendData = labels.map(labelDate => {
-                    let normalizedLabel = safeDate(labelDate);
-                    return allHistoricalAverages[normalizedLabel] !== undefined ? allHistoricalAverages[normalizedLabel] : null;
-                });
-            }
-        }
-
-        let speedDatasets = [
-            { 
-                label: 'Total Cards Graded', 
-                data: deltaTotalData, 
-                borderColor: '#1A365D', 
-                backgroundColor: '#1A365D', 
-                borderWidth: 2, 
-                fill: false, 
-                tension: 0.1,
-                yAxisID: 'y',
-                datalabels: {
-                    color: '#1A365D',
-                    align: 'top',
-                    offset: 4,
-                    font: { weight: 'bold' },
-                    formatter: function(value) { return value > 0 ? '+' + value : ''; }
+                if (isGrowthMode && dataArray.length > 0) {
+                    let baseTotal = dataArray[0][cName + '_Total'] || 0;
+                    let base10 = dataArray[0][cName + '_PSA10'] || 0;
+                    cTotalPop = dataArray.map(item => (item[cName + '_Total'] || 0) - baseTotal);
+                    cPsa10Pop = dataArray.map(item => (item[cName + '_PSA10'] || 0) - base10);
+                } else {
+                    cTotalPop = dataArray.map(item => item[cName + '_Total'] || 0);
+                    cPsa10Pop = dataArray.map(item => item[cName + '_PSA10'] || 0);
                 }
-            },
-            { 
-                label: 'PSA 10s Graded', 
-                data: delta10Data, 
-                borderColor: '#e53e3e', 
-                backgroundColor: '#e53e3e', 
-                borderWidth: 2, 
-                fill: false, 
-                tension: 0.1,
-                yAxisID: 'y',
-                datalabels: {
-                    color: '#e53e3e',
-                    align: 'bottom',
-                    offset: 4,
-                    font: { weight: 'bold' },
-                    formatter: function(value) { return value > 0 ? '+' + value : ''; }
-                }
-            }
-        ];
 
-        // Only render the green price line if we have valid price data
-        if (priceTrendData.some(val => val !== null)) {
-            speedDatasets.push({
-                label: 'Market Avg Price ($)', 
-                data: priceTrendData, 
-                borderColor: '#48bb78', 
-                backgroundColor: '#48bb78',
-                borderWidth: 3, 
-                fill: false, 
-                tension: 0.1,
-                spanGaps: true, 
-                yAxisID: 'y1',
-                datalabels: { display: false },
-                pointRadius: 4,
-                pointBackgroundColor: '#fff',
-                pointBorderWidth: 2
+                // Shorten labels so the legend doesn't get massive
+                let shortLabel = cName.substring(0, 15) + '...';
+
+                // Speed Chart
+                speedDatasets.push({
+                    label: `Total Graded - ${shortLabel}`, data: cDeltaTotal,
+                    borderColor: color.total, backgroundColor: color.total, borderWidth: 2, fill: false, tension: 0.1, yAxisID: 'y', datalabels: { display: false }
+                });
+                speedDatasets.push({
+                    label: `PSA 10s - ${shortLabel}`, data: cDelta10,
+                    borderColor: color.psa10, backgroundColor: color.psa10, borderWidth: 2, fill: false, tension: 0.1, yAxisID: 'y', datalabels: { display: false }
+                });
+
+                // Total Chart
+                totalDatasets.push({
+                    label: `Total Pop - ${shortLabel}`, data: cTotalPop,
+                    borderColor: color.total, backgroundColor: color.totalFill, borderWidth: 2, fill: true, tension: 0.1, yAxisID: 'y', datalabels: { display: false }
+                });
+                totalDatasets.push({
+                    label: `PSA 10 Pop - ${shortLabel}`, data: cPsa10Pop,
+                    borderColor: color.psa10, backgroundColor: 'transparent', borderWidth: 2, fill: false, tension: 0.1, yAxisID: 'y', datalabels: { display: false }
+                });
             });
+
+        // ==========================================
+        // SCENARIO 2: STANDARD MODE OR SET AGGREGATE
+        // ==========================================
+        } else {
+            let totalPopData = [];
+            let psa10Data = [];
+            let priceTrendData = []; 
+
+            if (isGrowthMode && dataArray.length > 0) {
+                let baselineTotal = parseInt(dataArray[0]['Total Pop']) || 0;
+                let baseline10 = parseInt(dataArray[0]['PSA 10 Pop']) || 0;
+                totalPopData = dataArray.map(item => (parseInt(item['Total Pop']) || 0) - baselineTotal);
+                psa10Data = dataArray.map(item => (parseInt(item['PSA 10 Pop']) || 0) - baseline10);
+            } else {
+                totalPopData = dataArray.map(item => parseInt(item['Total Pop']) || 0);
+                psa10Data = dataArray.map(item => parseInt(item['PSA 10 Pop']) || 0);
+            }
+            
+            const deltaTotalData = dataArray.map(item => item.deltaTotal);
+            const delta10Data = dataArray.map(item => item.delta10);
+
+            // Fetch Price Data only if not in Set Aggregate Mode
+            if (!isSetAggregateMode) {
+                const dbEntry = getCardDatabaseEntry(currentCardDetails);
+                if (dbEntry && dbEntry.cert && priceData && priceData.length > 0) {
+                    const certNumber = dbEntry.cert;
+                    
+                    let matchingRows = priceData.filter(row => {
+                        return row && row.length >= 2 && row[1].toString().trim() === certNumber.toString().trim();
+                    });
+
+                    let allHistoricalAverages = {};
+                    matchingRows.forEach(row => {
+                        let pullDateStr = row[0] ? row[0].toString().trim() : "";
+                        if (!pullDateStr) return;
+                        
+                        let cleanDate = safeDate(pullDateStr);
+
+                        let pricesForThisRun = [];
+                        for(let i = 2; i < row.length; i += 2) {
+                            let priceStr = row[i+1] ? row[i+1].toString().trim() : "";
+                            if (priceStr !== "" && priceStr.includes('$')) {
+                                let priceVal = parseFloat(priceStr.replace(/[^0-9.-]+/g,""));
+                                pricesForThisRun.push(priceVal);
+                            }
+                        }
+                        
+                        if (pricesForThisRun.length > 0) {
+                            let sum = pricesForThisRun.reduce((a, b) => a + b, 0);
+                            allHistoricalAverages[cleanDate] = sum / pricesForThisRun.length;
+                        }
+                    });
+
+                    priceTrendData = labels.map(labelDate => {
+                        let normalizedLabel = safeDate(labelDate);
+                        return allHistoricalAverages[normalizedLabel] !== undefined ? allHistoricalAverages[normalizedLabel] : null;
+                    });
+                }
+            }
+
+            speedDatasets = [
+                { 
+                    label: 'Total Cards Graded', data: deltaTotalData, borderColor: '#1A365D', backgroundColor: '#1A365D', 
+                    borderWidth: 2, fill: false, tension: 0.1, yAxisID: 'y',
+                    datalabels: { color: '#1A365D', align: 'top', offset: 4, font: { weight: 'bold' }, formatter: function(value) { return value > 0 ? '+' + value : ''; } }
+                },
+                { 
+                    label: 'PSA 10s Graded', data: delta10Data, borderColor: '#e53e3e', backgroundColor: '#e53e3e', 
+                    borderWidth: 2, fill: false, tension: 0.1, yAxisID: 'y',
+                    datalabels: { color: '#e53e3e', align: 'bottom', offset: 4, font: { weight: 'bold' }, formatter: function(value) { return value > 0 ? '+' + value : ''; } }
+                }
+            ];
+
+            totalDatasets = [
+                { label: 'Total Pop', data: totalPopData, borderColor: '#1A365D', backgroundColor: 'rgba(26, 54, 93, 0.1)', borderWidth: 2, fill: true, tension: 0.1, yAxisID: 'y', datalabels: { display: false } },
+                { label: 'PSA 10 Pop', data: psa10Data, borderColor: '#e53e3e', backgroundColor: 'transparent', borderWidth: 2, fill: false, tension: 0.1, yAxisID: 'y', datalabels: { display: false } }
+            ];
+
+            // Overlay price if we have it
+            if (priceTrendData.some(val => val !== null)) {
+                let priceConfig = {
+                    label: 'Market Avg Price ($)', data: priceTrendData, borderColor: '#48bb78', backgroundColor: '#48bb78',
+                    borderWidth: 3, fill: false, tension: 0.1, spanGaps: true, yAxisID: 'y1',
+                    datalabels: { display: false }, pointRadius: 4, pointBackgroundColor: '#fff', pointBorderWidth: 2
+                };
+                speedDatasets.push(priceConfig);
+                totalDatasets.push(priceConfig);
+            }
         }
 
+        // ==========================================
+        // RENDER LOGIC
+        // ==========================================
         if (mySpeedChart) mySpeedChart.destroy(); 
         mySpeedChart = new Chart(document.getElementById('gradingSpeedChart').getContext('2d'), {
             type: 'line',
-            data: {
-                labels: labels,
-                datasets: speedDatasets
-            },
+            data: { labels: labels, datasets: speedDatasets },
             options: { 
-                responsive: true, 
-                maintainAspectRatio: false,
-                layout: { padding: { top: 25, right: 20, left: 20, bottom: 20 } },
+                responsive: true, maintainAspectRatio: false, layout: { padding: { top: 25, right: 20, left: 20, bottom: 20 } },
                 interaction: { mode: 'index', intersect: false },
                 plugins: {
                     datalabels: {
                         display: function(context) { 
-                            if (context.dataset.label === 'Market Avg Price ($)') return false;
+                            if (isCompareMode || context.dataset.label === 'Market Avg Price ($)') return false;
                             return context.dataset.data[context.dataIndex] > 0; 
                         }
                     }
                 },
                 scales: {
-                    y: {
-                        type: 'linear',
-                        display: true,
-                        position: 'left',
-                        title: { display: true, text: 'Cards Graded', color: '#1A365D', font: {weight: 'bold'} }
-                    },
+                    y: { type: 'linear', display: true, position: 'left', title: { display: true, text: 'Cards Graded', color: '#1A365D', font: {weight: 'bold'} } },
                     y1: {
-                        type: 'linear',
-                        display: 'auto',
-                        position: 'right',
-                        title: { display: true, text: 'Price ($)', color: '#48bb78', font: {weight: 'bold'} },
-                        grid: { drawOnChartArea: false }, 
-                        ticks: {
-                            callback: function(value) {
-                                return '$' + value;
-                            }
-                        }
+                        type: 'linear', display: 'auto', position: 'right', title: { display: true, text: 'Price ($)', color: '#48bb78', font: {weight: 'bold'} },
+                        grid: { drawOnChartArea: false }, ticks: { callback: function(value) { return '$' + value; } }
                     }
                 }
             }
         });
 
-        let totalDatasets = [
-            { 
-                label: 'Total Pop', 
-                data: totalPopData, 
-                borderColor: '#1A365D', 
-                backgroundColor: 'rgba(26, 54, 93, 0.1)', 
-                borderWidth: 2, 
-                fill: true, 
-                tension: 0.1,
-                yAxisID: 'y',
-                datalabels: { display: false } 
-            },
-            { 
-                label: 'PSA 10 Pop', 
-                data: psa10Data, 
-                borderColor: '#e53e3e', 
-                backgroundColor: 'transparent', 
-                borderWidth: 2, 
-                fill: false, 
-                tension: 0.1, 
-                yAxisID: 'y',
-                datalabels: { display: false } 
-            }
-        ];
-
-        if (priceTrendData.some(val => val !== null)) {
-            totalDatasets.push({
-                label: 'Market Avg Price ($)', 
-                data: priceTrendData, 
-                borderColor: '#48bb78', 
-                backgroundColor: '#48bb78',
-                borderWidth: 3, 
-                fill: false, 
-                tension: 0.1,
-                spanGaps: true, 
-                yAxisID: 'y1',
-                datalabels: { display: false },
-                pointRadius: 4,
-                pointBackgroundColor: '#fff',
-                pointBorderWidth: 2
-            });
-        }
-
         if (myTotalChart) myTotalChart.destroy();
         myTotalChart = new Chart(document.getElementById('totalPopChart').getContext('2d'), {
             type: 'line',
-            data: {
-                labels: labels,
-                datasets: totalDatasets
-            },
+            data: { labels: labels, datasets: totalDatasets },
             options: { 
-                responsive: true, 
-                maintainAspectRatio: false, 
-                interaction: { mode: 'index', intersect: false },
+                responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
                 scales: {
-                    y: {
-                        type: 'linear',
-                        display: true,
-                        position: 'left',
-                        title: { display: true, text: 'Population Count', color: '#1A365D', font: {weight: 'bold'} }
-                    },
+                    y: { type: 'linear', display: true, position: 'left', title: { display: true, text: 'Population Count', color: '#1A365D', font: {weight: 'bold'} } },
                     y1: {
-                        type: 'linear',
-                        display: 'auto',
-                        position: 'right',
-                        title: { display: true, text: 'Price ($)', color: '#48bb78', font: {weight: 'bold'} },
-                        grid: { drawOnChartArea: false }, 
-                        ticks: {
-                            callback: function(value) {
-                                return '$' + value;
-                            }
-                        }
+                        type: 'linear', display: 'auto', position: 'right', title: { display: true, text: 'Price ($)', color: '#48bb78', font: {weight: 'bold'} },
+                        grid: { drawOnChartArea: false }, ticks: { callback: function(value) { return '$' + value; } }
                     }
                 }
             }
