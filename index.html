@@ -157,7 +157,7 @@
             margin-top: 20px;
         }
         
-        /* Dashboard Title Header with Image */
+        /* Dashboard Title Header */
         .dashboard-header-container {
             display: flex;
             align-items: center;
@@ -182,6 +182,68 @@
             margin: 0; 
         }
 
+        /* NEW: Spreadsheet Table CSS */
+        #tableViewContainer {
+            display: none;
+            overflow-x: auto;
+            overflow-y: auto;
+            max-height: 600px;
+            margin-bottom: 30px;
+            border: 1px solid #cbd5e0;
+            border-radius: 6px;
+            background: #fff;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        }
+        .spreadsheet-table {
+            border-collapse: separate; /* Required for sticky headers borders */
+            border-spacing: 0;
+            width: 100%;
+            min-width: 800px;
+            font-family: Arial, sans-serif;
+            font-size: 13px;
+        }
+        .spreadsheet-table th, .spreadsheet-table td {
+            border-bottom: 1px solid #e2e8f0;
+            border-right: 1px solid #e2e8f0;
+            padding: 8px 12px;
+            text-align: center;
+            white-space: nowrap;
+        }
+        .spreadsheet-table th {
+            background-color: #f7fafc;
+            color: #2d3748;
+            font-weight: bold;
+            position: sticky;
+            top: 0;
+            z-index: 2;
+            border-top: 1px solid #e2e8f0;
+        }
+        /* Offset second row of headers */
+        .spreadsheet-table thead tr:nth-child(2) th {
+            top: 36px; 
+            z-index: 2;
+        }
+        /* Lock the Date Column on the Left */
+        .spreadsheet-table .sticky-col {
+            position: sticky;
+            left: 0;
+            background-color: #f7fafc;
+            font-weight: bold;
+            z-index: 3;
+            border-left: 1px solid #e2e8f0;
+        }
+        /* Top Left Corner intersecting lock */
+        .spreadsheet-table thead th.sticky-col {
+            z-index: 4; 
+        }
+        .spreadsheet-table tbody tr:hover {
+            background-color: #ebf8ff;
+        }
+        /* Subtle shading for alternating columns */
+        .spreadsheet-table td:nth-child(even) {
+            background-color: #f8fafc;
+        }
+
         /* Summary Cards CSS - 3 COLUMNS */
         .summary-container {
             display: grid; 
@@ -195,9 +257,7 @@
             padding: 15px;
             border-radius: 6px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-            border-top: 1px solid #eaeaea;
-            border-right: 1px solid #eaeaea;
-            border-bottom: 1px solid #eaeaea;
+            border: 1px solid #eaeaea;
         }
         .summary-card.accent-red {
             border-left-color: #e53e3e;
@@ -207,7 +267,6 @@
             font-size: 13px;
             color: #718096;
             text-transform: uppercase;
-            letter-spacing: 0.5px;
         }
         .summary-card .value {
             font-size: 24px;
@@ -229,16 +288,13 @@
             padding: 15px;
             border-radius: 6px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-            border-top: 1px solid #eaeaea;
-            border-right: 1px solid #eaeaea;
-            border-bottom: 1px solid #eaeaea;
+            border: 1px solid #eaeaea;
         }
         .sales-card h4 {
             margin: 0 0 8px 0;
             font-size: 12px;
             color: #718096;
             text-transform: uppercase;
-            letter-spacing: 0.5px;
         }
         .sales-card .value {
             font-size: 18px;
@@ -259,7 +315,6 @@
             border-radius: 4px;
             color: #4a5568;
             margin-left: 10px;
-            font-weight: normal;
         }
 
         /* Chart Elements */
@@ -301,9 +356,6 @@
             cursor: pointer;
             border: none;
         }
-        .export-btn:hover {
-            background-color: #38a169;
-        }
         .toggle-btn {
             background-color: #edf2f7;
             color: #2d3748;
@@ -311,9 +363,6 @@
             font-size: 12px;
             padding: 6px 10px;
             font-weight: bold;
-        }
-        .toggle-btn:hover {
-            background-color: #e2e8f0;
         }
         .chart-container {
             position: relative;
@@ -394,9 +443,14 @@
             <button onclick="applyCustomDateRange()" style="background-color: #2b6cb0;">Apply Range</button>
         </div>
 
+        <!-- ADVANCED TOOLS -->
         <div class="control-group">
             <label><strong>Advanced Tools:</strong></label>
             <button onclick="loadSetAggregate()" style="background-color: #805ad5;">📊 Aggregate Active Set</button>
+            
+            <!-- NEW SPREADSHEET BUTTON -->
+            <button onclick="viewSetTable()" style="background-color: #38a169; margin-left: 10px;">📋 View Spreadsheet Table</button>
+
             <button id="addCompareBtn" onclick="addToCompare()" style="background-color: #ed8936; margin-left: 10px;">➕ Add to Compare (0/3)</button>
             <button id="viewCompareBtn" onclick="viewCompare()" style="background-color: #dd6b20; display: none;">📈 View Comparison</button>
             <button id="clearCompareBtn" onclick="clearCompare()" style="background-color: #e53e3e; display: none;">❌ Clear</button>
@@ -410,7 +464,10 @@
             <div class="card-header-title" id="displayCardName">Card Name</div>
         </div>
 
-        <div class="chart-wrapper" style="margin-bottom: 30px;">
+        <!-- SPREADSHEET CONTAINER -->
+        <div id="tableViewContainer"></div>
+
+        <div class="chart-wrapper" id="topChartWrapper" style="margin-bottom: 30px;">
             <div class="chart-header">
                 <h3>Grading Speed & Market Price</h3>
                 <button class="export-btn" onclick="exportChart('gradingSpeedChart', 'Grading_Speed')">Download PNG</button>
@@ -420,7 +477,7 @@
             </div>
         </div>
 
-        <div class="summary-container">
+        <div class="summary-container" id="summaryContainer">
             <div class="summary-card">
                 <h4>Today Added (Total)</h4>
                 <p class="value" id="statTodayTotal">0</p>
@@ -447,7 +504,7 @@
             </div>
         </div>
 
-        <div class="graphs-wrapper">
+        <div class="graphs-wrapper" id="bottomGraphsWrapper">
             <div class="chart-wrapper">
                 <div class="chart-header">
                     <div class="chart-header-left">
@@ -480,7 +537,6 @@
 
 <script>
     Chart.register(ChartDataLabels);
-
     Chart.register({
         id: 'whiteBackground',
         beforeDraw: (chart) => {
@@ -498,7 +554,7 @@
     // ==========================================
     function safeDate(dStr) {
         if (!dStr) return "";
-        let cleanStr = dStr.split('T')[0].split(' ')[0]; // Strip time if exists
+        let cleanStr = dStr.split('T')[0].split(' ')[0]; 
         
         if (cleanStr.includes('-')) {
             let parts = cleanStr.split('-');
@@ -523,14 +579,14 @@
     let currentCardDetails = "";
     let isGrowthMode = false; 
 
-    // STATE VARIABLES FOR SET AGGREGATION & MULTI-COMPARE
+    // STATE VARIABLES
     let currentSetDetails = null;
     let isSetAggregateMode = false;
     let isCompareMode = false;
     let comparisonList = [];
 
     function getCardDatabaseEntry(selectedName) {
-        if (!cardDatabase) return null; // Safety check in case database.js fails to load
+        if (!cardDatabase) return null;
         const normalizedSelected = selectedName.trim().replace(/\s+/g, ' ').toUpperCase();
         for (let key in cardDatabase) {
             let normalizedKey = key.trim().replace(/\s+/g, ' ').toUpperCase();
@@ -539,6 +595,17 @@
             }
         }
         return null;
+    }
+
+    // ==========================================
+    // UI VIEW MANAGER
+    // ==========================================
+    function resetDashboardViews() {
+        // Hides spreadsheet, restores charts and summaries
+        document.getElementById('tableViewContainer').style.display = 'none';
+        document.getElementById('topChartWrapper').style.display = 'block';
+        document.getElementById('summaryContainer').style.display = 'grid';
+        document.getElementById('bottomGraphsWrapper').style.display = 'flex';
     }
 
     document.getElementById('popFileInput').addEventListener('change', function(e) {
@@ -572,7 +639,6 @@
 
     function processHierarchy() {
         dataHierarchy = {};
-        
         rawData.forEach(item => {
             const cardName = item['Card Details'];
             if (!cardName) return;
@@ -677,7 +743,6 @@
                 document.querySelectorAll('.card-item').forEach(c => c.classList.remove('active'));
                 div.classList.add('active');
                 
-                // Turn off master features when a single card is clicked
                 isSetAggregateMode = false; 
                 isCompareMode = false;
                 currentCardDetails = card;
@@ -693,6 +758,7 @@
                     imgElement.style.display = 'none';
                 }
 
+                resetDashboardViews();
                 document.getElementById('mainDashboard').style.display = 'block';
 
                 prepareCardData();
@@ -703,10 +769,91 @@
     }
 
     // ==========================================
+    // NEW: SPREADSHEET TABLE GENERATOR
+    // ==========================================
+    function viewSetTable() {
+        if (!currentSetDetails || !currentSetDetails.set) {
+            alert("Please select a specific Set from the tabs above first.");
+            return;
+        }
+
+        // Setup View Toggles
+        document.getElementById('topChartWrapper').style.display = 'none';
+        document.getElementById('summaryContainer').style.display = 'none';
+        document.getElementById('bottomGraphsWrapper').style.display = 'none';
+        document.getElementById('cardDisplayImage').style.display = 'none';
+        document.querySelectorAll('.card-item').forEach(c => c.classList.remove('active'));
+        
+        const tableContainer = document.getElementById('tableViewContainer');
+        tableContainer.style.display = 'block';
+        document.getElementById('mainDashboard').style.display = 'block';
+
+        currentCardDetails = "SPREADSHEET VIEW: " + currentSetDetails.set;
+        document.getElementById('displayCardName').innerText = currentCardDetails;
+
+        const { year, game, set } = currentSetDetails;
+        const cardsInSet = Array.from(dataHierarchy[year][game][set]).sort();
+        
+        let setRawData = rawData.filter(item => cardsInSet.includes(item['Card Details']));
+        let uniqueDates = [...new Set(setRawData.map(item => item.Date))].sort((a, b) => new Date(b) - new Date(a)); // Descending Sort
+
+        let tableHTML = `<table class="spreadsheet-table">`;
+        
+        // Row 1: Headers (Card Names)
+        tableHTML += `<thead><tr><th rowspan="2" class="sticky-col">Date</th>`;
+        cardsInSet.forEach(card => {
+            let cleanName = card;
+            let splitKeyword = set.toUpperCase();
+            
+            // Strip out year, game, and set to make columns compact
+            if (card.includes(splitKeyword)) {
+                cleanName = card.split(splitKeyword)[1].trim();
+            }
+            
+            // Apply formatting acronyms for readability
+            cleanName = cleanName.replace(/SPECIAL ILLUSTRATION RARE/g, "SIR")
+                                 .replace(/ILLUSTRATION RARE/g, "IR")
+                                 .replace(/ALTERNATE ART/g, "ALT ART")
+                                 .replace(/FIRST PARTNER ILLUSTRATION COLLECTION SERIES 1/g, "FIRST PARTNER");
+            
+            tableHTML += `<th colspan="2" title="${card}">${cleanName}</th>`;
+        });
+        tableHTML += `</tr><tr>`;
+
+        // Row 2: Sub-Headers (Pop metrics)
+        cardsInSet.forEach(() => {
+            tableHTML += `<th>Total Pop</th><th>PSA 10 Pop</th>`;
+        });
+        tableHTML += `</tr></thead><tbody>`;
+
+        // Data Body
+        uniqueDates.forEach(date => {
+            let recordsOnDate = setRawData.filter(item => item.Date === date);
+            let dateMap = {};
+            recordsOnDate.forEach(r => {
+                dateMap[r['Card Details']] = r;
+            });
+
+            tableHTML += `<tr><td class="sticky-col">${safeDate(date)}</td>`;
+
+            cardsInSet.forEach(card => {
+                let record = dateMap[card];
+                let total = record ? (parseInt(record['Total Pop']) || 0) : 0;
+                let psa10 = record ? (parseInt(record['PSA 10 Pop']) || 0) : 0;
+                tableHTML += `<td>${total}</td><td>${psa10}</td>`;
+            });
+            tableHTML += `</tr>`;
+        });
+
+        tableHTML += `</tbody></table>`;
+        tableContainer.innerHTML = tableHTML;
+    }
+
+    // ==========================================
     // MULTI-CARD COMPARISON LOGIC
     // ==========================================
     function addToCompare() {
-        if (isSetAggregateMode || isCompareMode) {
+        if (isSetAggregateMode || isCompareMode || document.getElementById('tableViewContainer').style.display === 'block') {
             alert("You can only add individual cards to the comparison. Please select a single card from the list first.");
             return;
         }
@@ -758,6 +905,8 @@
         document.getElementById('cardDisplayImage').style.display = 'none';
         
         document.querySelectorAll('.card-item').forEach(c => c.classList.remove('active'));
+        
+        resetDashboardViews();
         document.getElementById('mainDashboard').style.display = 'block';
 
         prepareCompareData();
@@ -790,7 +939,6 @@
             allCardData.push(rowObj);
         });
 
-        // Calculate independent growth deltas for each card
         comparisonList.forEach(c => {
             allCardData.forEach((item, index) => {
                 if (index === 0) {
@@ -823,6 +971,8 @@
         document.getElementById('cardDisplayImage').style.display = 'none';
         
         document.querySelectorAll('.card-item').forEach(c => c.classList.remove('active'));
+        
+        resetDashboardViews();
         document.getElementById('mainDashboard').style.display = 'block';
 
         prepareSetData();
@@ -969,7 +1119,6 @@
 
         const latestDay = dataArray[dataArray.length - 1];
 
-        // Complex calculation if comparing multiple cards
         if (isCompareMode) {
             comparisonList.forEach(c => {
                 todayTotalAdded += latestDay[c + '_deltaTotal'] || 0;
@@ -982,7 +1131,6 @@
                 latest10s += latestDay[c + '_PSA10'] || 0;
             });
         } else {
-            // Standard calculation for Single Card or Set Aggregate
             todayTotalAdded = latestDay.deltaTotal || 0;
             today10sAdded = latestDay.delta10 || 0;
 
@@ -1127,15 +1275,11 @@
         let speedDatasets = [];
         let totalDatasets = [];
 
-        // ==========================================
-        // SCENARIO 1: COMPARE MODE (Multiple Cards)
-        // ==========================================
         if (isCompareMode) {
-            // Three distinct color palettes for the overlapping cards
             const compareColors = [
-                { total: '#1A365D', psa10: '#e53e3e', totalFill: 'rgba(26, 54, 93, 0.1)' },   // Card 1: Standard Blue / Red
-                { total: '#22543D', psa10: '#48BB78', totalFill: 'rgba(34, 84, 61, 0.1)' },   // Card 2: Dark Green / Light Green
-                { total: '#44337A', psa10: '#ED64A6', totalFill: 'rgba(68, 51, 122, 0.1)' }   // Card 3: Purple / Pink
+                { total: '#1A365D', psa10: '#e53e3e', totalFill: 'rgba(26, 54, 93, 0.1)' },
+                { total: '#22543D', psa10: '#48BB78', totalFill: 'rgba(34, 84, 61, 0.1)' },
+                { total: '#44337A', psa10: '#ED64A6', totalFill: 'rgba(68, 51, 122, 0.1)' }
             ];
 
             comparisonList.forEach((cName, idx) => {
@@ -1155,10 +1299,8 @@
                     cPsa10Pop = dataArray.map(item => item[cName + '_PSA10'] || 0);
                 }
 
-                // Shorten labels so the legend doesn't get massive
                 let shortLabel = cName.substring(0, 15) + '...';
 
-                // Speed Chart
                 speedDatasets.push({
                     label: `Total Graded - ${shortLabel}`, data: cDeltaTotal,
                     borderColor: color.total, backgroundColor: color.total, borderWidth: 2, fill: false, tension: 0.1, yAxisID: 'y', datalabels: { display: false }
@@ -1168,7 +1310,6 @@
                     borderColor: color.psa10, backgroundColor: color.psa10, borderWidth: 2, fill: false, tension: 0.1, yAxisID: 'y', datalabels: { display: false }
                 });
 
-                // Total Chart
                 totalDatasets.push({
                     label: `Total Pop - ${shortLabel}`, data: cTotalPop,
                     borderColor: color.total, backgroundColor: color.totalFill, borderWidth: 2, fill: true, tension: 0.1, yAxisID: 'y', datalabels: { display: false }
@@ -1179,9 +1320,6 @@
                 });
             });
 
-        // ==========================================
-        // SCENARIO 2: STANDARD MODE OR SET AGGREGATE
-        // ==========================================
         } else {
             let totalPopData = [];
             let psa10Data = [];
@@ -1200,7 +1338,6 @@
             const deltaTotalData = dataArray.map(item => item.deltaTotal);
             const delta10Data = dataArray.map(item => item.delta10);
 
-            // Fetch Price Data only if not in Set Aggregate Mode
             if (!isSetAggregateMode) {
                 const dbEntry = getCardDatabaseEntry(currentCardDetails);
                 if (dbEntry && dbEntry.cert && priceData && priceData.length > 0) {
@@ -1257,7 +1394,6 @@
                 { label: 'PSA 10 Pop', data: psa10Data, borderColor: '#e53e3e', backgroundColor: 'transparent', borderWidth: 2, fill: false, tension: 0.1, yAxisID: 'y', datalabels: { display: false } }
             ];
 
-            // Overlay price if we have it
             if (priceTrendData.some(val => val !== null)) {
                 let priceConfig = {
                     label: 'Market Avg Price ($)', data: priceTrendData, borderColor: '#48bb78', backgroundColor: '#48bb78',
@@ -1269,9 +1405,6 @@
             }
         }
 
-        // ==========================================
-        // RENDER LOGIC
-        // ==========================================
         if (mySpeedChart) mySpeedChart.destroy(); 
         mySpeedChart = new Chart(document.getElementById('gradingSpeedChart').getContext('2d'), {
             type: 'line',
