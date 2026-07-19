@@ -25,5 +25,6 @@
         "2026 POKEMON ASC EN-ASCENDED HEROES 277 PIKACHU EX SPECIAL ILLUSTRATION RARE": { cert: "152642825", image: "https://den-cards.pokellector.com/426/Pikachu-ex.ASC.277.60548.png" }, 
         "2026 POKEMON ASC EN-ASCENDED HEROES 281 TEAM ROCKET'S MEWTWO EX SPECIAL ILLUSTRATION RARE": { cert: "157044224", image: "https://den-cards.pokellector.com/426/Team-Rockets-Mewtwo-ex.ASC.281.60552.png" },
         "2026 POKEMON ASC EN-ASCENDED HEROES 284 MEGA GENGAR EX SPECIAL ILLUSTRATION RARE": { cert: "158904150", image: "https://den-cards.pokellector.com/426/Mega-Gengar-ex.ASC.284.59738.png" },
-        "2026 POKEMON ASC EN-ASCENDED HEROES 290 MEGA DRAGONITE EX SPECIAL ILLUSTRATION RARE": { cert: "156914085", image: "https://den-cards.pokellector.com/426/Mega-Dragonite-ex.ASC.290.60323.png" }
+        "2026 POKEMON ASC EN-ASCENDED HEROES 290 MEGA DRAGONITE EX SPECIAL ILLUSTRATION RARE": { cert: "156914085", image: "https://den-cards.pokellector.com/426/Mega-Dragonite-ex.ASC.290.60323.png" },
+        "2026 ONE PIECE PROMOS DON!! CARD DODGERS X ONE PIECE NIGHT": {cert: "167728118", image: "https://storage.googleapis.com/images.pricecharting.com/hxejwv7p3qm3xrn6/240.jpg"}
     };
