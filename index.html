@@ -7,6 +7,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     
     <script src="database.js"></script> 
     
@@ -67,6 +68,19 @@
         .chart-container { position: relative; height: 40vh; width: 100%; }
         .top-chart-container { height: 50vh; }
         #warning { color: #d9534f; font-size: 12px; text-align: center; margin-top: -10px; margin-bottom: 10px; }
+        .finance-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 15px; }
+        .finance-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 15px; }
+        .finance-box h4 { margin: 0 0 12px 0; font-size: 13px; color: #4a5568; text-transform: uppercase; }
+        .finance-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+        .finance-row label { font-size: 13px; color: #4a5568; }
+        .finance-row input { width: 110px; padding: 6px 8px; border: 1px solid #cbd5e0; border-radius: 4px; font-size: 13px; }
+        .finance-output { margin-top: 10px; font-size: 14px; font-weight: bold; color: #2d3748; background: #fff; border: 1px dashed #cbd5e0; border-radius: 4px; padding: 10px; line-height: 1.5; }
+        .finance-output.signal-buy { color: #22543d; background: #c6f6d5; border: 1px solid #9ae6b4; }
+        .finance-output.signal-sell { color: #742a2a; background: #fed7d7; border: 1px solid #feb2b2; }
+        .finance-output.profit-positive { color: #22543d; }
+        .finance-output.profit-negative { color: #c53030; }
+        #listingTitle { width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #cbd5e0; border-radius: 4px; font-size: 13px; font-family: Arial, sans-serif; resize: vertical; background: #fff; }
+        #watchlistSelect { padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; background: #fff; min-width: 200px; }
     </style>
 </head>
 <body>
@@ -144,6 +158,21 @@
             <button id="viewCompareBtn" onclick="viewCompare()" style="background-color: #dd6b20; display: none;">📈 View Comparison</button>
             <button id="clearCompareBtn" onclick="clearCompare()" style="background-color: #e53e3e; display: none;">❌ Clear</button>
         </div>
+
+        <div class="control-group">
+            <label><strong>Data Integrity:</strong></label>
+            <button id="outlierBtn" onclick="toggleOutlierFilter()" style="background-color: #2c7a7b;">🛡️ Outlier Filter: ON</button>
+            <button id="priceMABtn" onclick="togglePriceMA()" style="background-color: #4a5568; margin-left: 10px;">📈 7-Day Price Avg: OFF</button>
+            <button onclick="exportTearSheet()" style="background-color: #975a16; margin-left: 10px;">📄 PDF Tear Sheet</button>
+        </div>
+
+        <div class="control-group">
+            <label><strong>Watchlists:</strong></label>
+            <select id="watchlistSelect"><option value="">— Saved Watchlists —</option></select>
+            <button onclick="loadWatchlist()" style="background-color: #2b6cb0;">📂 Load</button>
+            <button onclick="saveCurrentWatchlist()" style="background-color: #48bb78;">💾 Save Current</button>
+            <button onclick="deleteWatchlist()" style="background-color: #e53e3e;">🗑️ Delete</button>
+        </div>
     </div>
 
     <div id="mainDashboard">
@@ -220,6 +249,47 @@
                 </div>
             </div>
         </div>
+
+        <div class="chart-wrapper" id="financePanel" style="margin-top: 30px;">
+            <div class="chart-header">
+                <h3>💰 Financial & Listing Tools</h3>
+            </div>
+            <div class="finance-grid">
+                <div class="finance-box">
+                    <h4>Grading Arbitrage Calculator</h4>
+                    <div class="finance-row">
+                        <label for="finCost">Raw Card Cost ($)</label>
+                        <input type="number" id="finCost" min="0" step="0.01" placeholder="0.00" oninput="onFinanceInput()" onchange="onFinanceChange()">
+                    </div>
+                    <div class="finance-row">
+                        <label for="finFee">Grading Fees ($)</label>
+                        <input type="number" id="finFee" min="0" step="0.01" placeholder="0.00" oninput="onFinanceInput()" onchange="onFinanceChange()">
+                    </div>
+                    <div id="arbitrageOutput" class="finance-output">Enter your costs to calculate margin.</div>
+                </div>
+                <div class="finance-box">
+                    <h4>Buy / Sell Alerts</h4>
+                    <div class="finance-row">
+                        <label for="finBuy">Buy Target ($)</label>
+                        <input type="number" id="finBuy" min="0" step="0.01" placeholder="—" oninput="onFinanceInput()" onchange="onFinanceChange()">
+                    </div>
+                    <div class="finance-row">
+                        <label for="finSell">Sell Target ($)</label>
+                        <input type="number" id="finSell" min="0" step="0.01" placeholder="—" oninput="onFinanceInput()" onchange="onFinanceChange()">
+                    </div>
+                    <div id="signalOutput" class="finance-output">Set targets to activate alerts.</div>
+                </div>
+                <div class="finance-box">
+                    <h4>Listing Assistant <span id="titleCounter" class="cert-badge"></span></h4>
+                    <textarea id="listingTitle" rows="2" readonly></textarea>
+                    <div id="listingPricing" class="finance-output">Upload price data for pricing suggestions.</div>
+                    <div style="display: flex; gap: 8px; margin-top: 10px;">
+                        <button onclick="copyListingTitle(this)" style="font-size: 12px; padding: 6px 10px;">📋 Copy Title</button>
+                        <button onclick="copyListingPricing(this)" style="font-size: 12px; padding: 6px 10px; background-color: #4a5568;">📋 Copy Pricing</button>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -267,6 +337,84 @@
     let isCompareMode = false;
     let isSmoothingEnabled = false; // NEW STATE VARIABLE
     let comparisonList = [];
+    let isOutlierFilterEnabled = true;  // Data Integrity: auto-ignore anomalous sales
+    let isPriceMAEnabled = false;       // Data Integrity: 7-day moving price average trendline
+
+    // ==========================================
+    // SHARED PRICE & DATE HELPERS
+    // ==========================================
+    // Converts any supported date string (ISO or M/D/YYYY) into a local-midnight Date object.
+    function toDateObj(dStr) {
+        if (!dStr) return null;
+        let clean = safeDate(dStr.toString());
+        let parts = clean.split('/');
+        if (parts.length === 3) {
+            let d = new Date(parseInt(parts[2]), parseInt(parts[0]) - 1, parseInt(parts[1]));
+            if (!isNaN(d)) return d;
+        }
+        let fallback = new Date(dStr);
+        return isNaN(fallback) ? null : fallback;
+    }
+
+    function getMatchingPriceRows(certNumber) {
+        if (!priceData || priceData.length === 0) return [];
+        return priceData.filter(row => row && row.length >= 2 && row[1] != null && row[1].toString().trim() === certNumber.toString().trim());
+    }
+
+    function extractRowPrices(row) {
+        let prices = [];
+        for (let i = 2; i < row.length; i += 2) {
+            let priceStr = row[i+1] ? row[i+1].toString().trim() : "";
+            if (priceStr !== "" && priceStr.includes('$')) {
+                let val = parseFloat(priceStr.replace(/[^0-9.-]+/g, ""));
+                if (!isNaN(val) && val > 0) prices.push(val);
+            }
+        }
+        return prices;
+    }
+
+    // Groups sale prices by the scraper's Pull Date. When the outlier filter is active,
+    // sales deviating wildly from the historical median (fakes, shill bids, typos) are
+    // excluded BEFORE any daily averages are computed, so every consumer
+    // (sales cards, chart trendlines, arbitrage, alerts) stays consistent.
+    function getGroupedPullPrices(certNumber) {
+        let groups = {};
+        getMatchingPriceRows(certNumber).forEach(row => {
+            let pullDate = row[0] ? row[0].toString().trim() : "";
+            if (!pullDate) return;
+            let prices = extractRowPrices(row);
+            if (prices.length > 0) groups[pullDate] = prices;
+        });
+
+        let removedCount = 0;
+        if (isOutlierFilterEnabled) {
+            let all = [];
+            for (let d in groups) all = all.concat(groups[d]);
+            if (all.length >= 4) { // need a minimum sample before judging outliers
+                let sorted = [...all].sort((a, b) => a - b);
+                let mid = Math.floor(sorted.length / 2);
+                let median = sorted.length % 2 ? sorted[mid] : (sorted[mid-1] + sorted[mid]) / 2;
+                let low = median * 0.35, high = median * 2.8;
+                for (let d in groups) {
+                    let kept = groups[d].filter(p => p >= low && p <= high);
+                    removedCount += groups[d].length - kept.length;
+                    if (kept.length > 0) groups[d] = kept; else delete groups[d];
+                }
+            }
+        }
+        return { groups: groups, removedCount: removedCount };
+    }
+
+    // Returns { "M/D/YYYY": averagePrice } keyed by timezone-safe pull dates.
+    function getDailyAverages(certNumber) {
+        const { groups } = getGroupedPullPrices(certNumber);
+        let averages = {};
+        for (let d in groups) {
+            let sum = groups[d].reduce((a, b) => a + b, 0);
+            averages[safeDate(d)] = sum / groups[d].length;
+        }
+        return averages;
+    }
 
     function getCardDatabaseEntry(selectedName) {
         if (!cardDatabase) return null;
@@ -283,6 +431,8 @@
         document.getElementById('topChartWrapper').style.display = 'block';
         document.getElementById('summaryContainer').style.display = 'grid';
         document.getElementById('bottomGraphsWrapper').style.display = 'flex';
+        // Financial tools only make sense for a single card (needs one cert number)
+        document.getElementById('financePanel').style.display = (!isCompareMode && !isSetAggregateMode) ? 'block' : 'none';
     }
 
     document.getElementById('popFileInput').addEventListener('change', function(e) {
@@ -294,7 +444,7 @@
     document.getElementById('priceFileInput').addEventListener('change', function(e) {
         const file = e.target.files[0];
         if (!file) return;
-        Papa.parse(file, { header: false, skipEmptyLines: true, complete: function(results) { priceData = results.data; if (currentCardDetails) updateRecentSales(); if (currentCardDetails && currentDisplayData.length > 0) renderCharts(); }});
+        Papa.parse(file, { header: false, skipEmptyLines: true, complete: function(results) { priceData = results.data; if (currentCardDetails) { updateRecentSales(); updateFinancialTools(); } if (currentCardDetails && currentDisplayData.length > 0) renderCharts(); }});
     });
 
     function processHierarchy() {
@@ -377,7 +527,7 @@
                 else { imgElement.style.display = 'none'; }
 
                 resetDashboardViews(); document.getElementById('mainDashboard').style.display = 'block';
-                prepareCardData(); updateChart(0); 
+                loadFinanceInputs(); prepareCardData(); updateChart(0); 
             };
             container.appendChild(div);
         });
@@ -460,6 +610,7 @@
         document.getElementById('topChartWrapper').style.display = 'none';
         document.getElementById('summaryContainer').style.display = 'none';
         document.getElementById('bottomGraphsWrapper').style.display = 'none';
+        document.getElementById('financePanel').style.display = 'none';
         document.getElementById('cardDisplayImage').style.display = 'none';
         document.querySelectorAll('.card-item').forEach(c => c.classList.remove('active'));
         
@@ -668,7 +819,7 @@
         if (days > 0) displayData = displayData.slice(-days);
         currentDisplayData = displayData;
         
-        renderCharts(); updateSummaryStats(); updateRecentSales(); 
+        renderCharts(); updateSummaryStats(); updateRecentSales(); updateFinancialTools(); 
     }
 
     function applyCustomDateRange() {
@@ -687,7 +838,7 @@
 
         if (displayData.length === 0) { alert("No data found in this date range."); return; }
         currentDisplayData = displayData;
-        renderCharts(); updateSummaryStats(); updateRecentSales(); 
+        renderCharts(); updateSummaryStats(); updateRecentSales(); updateFinancialTools(); 
     }
 
     function toggleGrowthMode() {
@@ -758,42 +909,30 @@
         }
 
         const certNumber = dbEntry.cert; badge.innerText = `Cert #${certNumber}`;
-        let matchingRows = priceData.filter(row => { if (!row || row.length < 2) return false; return row[1].toString().trim() === certNumber.toString().trim(); });
-        if (matchingRows.length === 0) { container.innerHTML = `<div class="sales-placeholder">No sales data found in the CSV for Cert #${certNumber}.</div>`; return; }
+        if (getMatchingPriceRows(certNumber).length === 0) { container.innerHTML = `<div class="sales-placeholder">No sales data found in the CSV for Cert #${certNumber}.</div>`; return; }
 
-        let latestRow = matchingRows[matchingRows.length - 1]; let latestSalesCount = 0;
-        for(let i = 2; i < latestRow.length; i += 2) {
-            let priceStr = latestRow[i+1] ? latestRow[i+1].toString().trim() : "";
-            if (priceStr !== "" && priceStr.includes('$')) latestSalesCount++;
-        }
-        let confidence = Math.min(5, latestSalesCount);
-        let groupedByPullDate = {};
-
-        matchingRows.forEach(row => {
-            let pullDate = row[0] ? row[0].toString().trim() : ""; if (!pullDate) return;
-            let pricesForThisRun = [];
-            for(let i = 2; i < row.length; i += 2) {
-                let priceStr = row[i+1] ? row[i+1].toString().trim() : "";
-                if (priceStr !== "" && priceStr.includes('$')) {
-                    let priceVal = parseFloat(priceStr.replace(/[^0-9.-]+/g,"")); pricesForThisRun.push(priceVal);
-                }
-            }
-            if (pricesForThisRun.length > 0) groupedByPullDate[pullDate] = pricesForThisRun;
-        });
-
-        let availablePullDates = Object.keys(groupedByPullDate);
+        const { groups, removedCount } = getGroupedPullPrices(certNumber);
+        let availablePullDates = Object.keys(groups);
         if (availablePullDates.length === 0) { container.innerHTML = `<div class="sales-placeholder">No valid price data found for Cert #${certNumber}.</div>`; return; }
 
-        let sortedDates = availablePullDates.sort((a,b) => new Date(b) - new Date(a));
+        let sortedDates = availablePullDates.sort((a,b) => (toDateObj(b) || new Date(0)) - (toDateObj(a) || new Date(0)));
         let top5Dates = sortedDates.slice(0, 5);
+        let confidence = Math.min(5, groups[sortedDates[0]].length);
 
         top5Dates.forEach(date => {
-            let pricesForDay = groupedByPullDate[date]; let sum = pricesForDay.reduce((a, b) => a + b, 0); let avg = sum / pricesForDay.length;
+            let pricesForDay = groups[date]; let sum = pricesForDay.reduce((a, b) => a + b, 0); let avg = sum / pricesForDay.length;
             let formattedAvg = avg.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
             const card = document.createElement('div'); card.className = 'sales-card';
             card.innerHTML = `<h4>${date}</h4><p class="value">${formattedAvg}</p><p style="font-size: 10px; color: #a0aec0; margin: 5px 0 0 0; text-transform: uppercase;">Run Avg (${pricesForDay.length} Sale${pricesForDay.length > 1 ? 's' : ''})</p>`;
             container.appendChild(card);
         });
+        if (removedCount > 0) {
+            const note = document.createElement('div');
+            note.className = 'sales-placeholder';
+            note.style.gridColumn = '1 / -1'; note.style.padding = '5px 0';
+            note.innerText = `🛡️ Outlier filter excluded ${removedCount} anomalous sale${removedCount > 1 ? 's' : ''} from these averages.`;
+            container.appendChild(note);
+        }
         confBadge.innerText = `Confidence: ${confidence}/5`; confBadge.style.display = 'inline-block';
     }
 
@@ -830,7 +969,7 @@
             });
 
         } else {
-            let totalPopData = [], psa10Data = [], priceTrendData = []; 
+            let totalPopData = [], psa10Data = [], priceTrendData = [], maTrendData = []; 
 
             if (isGrowthMode && dataArray.length > 0) {
                 let baselineTotal = parseInt(dataArray[0]['Total Pop']) || 0, baseline10 = parseInt(dataArray[0]['PSA 10 Pop']) || 0;
@@ -847,26 +986,24 @@
             if (!isSetAggregateMode) {
                 const dbEntry = getCardDatabaseEntry(currentCardDetails);
                 if (dbEntry && dbEntry.cert && priceData && priceData.length > 0) {
-                    const certNumber = dbEntry.cert;
-                    let matchingRows = priceData.filter(row => { return row && row.length >= 2 && row[1].toString().trim() === certNumber.toString().trim(); });
-                    let allHistoricalAverages = {};
-                    matchingRows.forEach(row => {
-                        let pullDateStr = row[0] ? row[0].toString().trim() : ""; if (!pullDateStr) return;
-                        let cleanDate = safeDate(pullDateStr);
-                        let pricesForThisRun = [];
-                        for(let i = 2; i < row.length; i += 2) {
-                            let priceStr = row[i+1] ? row[i+1].toString().trim() : "";
-                            if (priceStr !== "" && priceStr.includes('$')) {
-                                let priceVal = parseFloat(priceStr.replace(/[^0-9.-]+/g,"")); pricesForThisRun.push(priceVal);
-                            }
-                        }
-                        if (pricesForThisRun.length > 0) {
-                            let sum = pricesForThisRun.reduce((a, b) => a + b, 0); allHistoricalAverages[cleanDate] = sum / pricesForThisRun.length;
-                        }
-                    });
+                    const allHistoricalAverages = getDailyAverages(dbEntry.cert);
                     priceTrendData = labels.map(labelDate => {
                         let normalizedLabel = safeDate(labelDate); return allHistoricalAverages[normalizedLabel] !== undefined ? allHistoricalAverages[normalizedLabel] : null;
                     });
+
+                    if (isPriceMAEnabled) {
+                        // Trailing 7-day window over the daily run averages
+                        let points = Object.keys(allHistoricalAverages)
+                            .map(k => ({ t: toDateObj(k), avg: allHistoricalAverages[k] }))
+                            .filter(p => p.t);
+                        maTrendData = labels.map(labelDate => {
+                            let end = toDateObj(labelDate); if (!end) return null;
+                            let start = new Date(end.getTime() - 6 * 86400000);
+                            let win = points.filter(p => p.t >= start && p.t <= end);
+                            if (win.length === 0) return null;
+                            return win.reduce((s, p) => s + p.avg, 0) / win.length;
+                        });
+                    }
                 }
             }
 
@@ -892,6 +1029,28 @@
                     datalabels: { display: false }, pointRadius: 4, pointBackgroundColor: '#fff', pointBorderWidth: 2
                 };
                 speedDatasets.push(priceConfig); totalDatasets.push(priceConfig);
+
+                if (isPriceMAEnabled && maTrendData.some(val => val !== null)) {
+                    let maConfig = {
+                        label: '7-Day Avg Price ($)', data: maTrendData, borderColor: '#2f855a', backgroundColor: '#2f855a', borderDash: [8, 4], borderWidth: 2, fill: false, tension: 0.3, spanGaps: true, yAxisID: 'y1',
+                        datalabels: { display: false }, pointRadius: 0
+                    };
+                    speedDatasets.push(maConfig); totalDatasets.push(maConfig);
+                }
+
+                // Buy/Sell alert threshold lines (dashed, price axis)
+                if (!isSetAggregateMode) {
+                    const fin = getFinanceSettings(currentCardDetails);
+                    let buyVal = parseFloat(fin.buy), sellVal = parseFloat(fin.sell);
+                    if (!isNaN(buyVal) && buyVal > 0) {
+                        let buyLine = { label: 'Buy Target ($)', data: labels.map(() => buyVal), borderColor: '#3182ce', backgroundColor: '#3182ce', borderDash: [4, 4], borderWidth: 1.5, fill: false, tension: 0, yAxisID: 'y1', datalabels: { display: false }, pointRadius: 0 };
+                        speedDatasets.push(buyLine); totalDatasets.push(buyLine);
+                    }
+                    if (!isNaN(sellVal) && sellVal > 0) {
+                        let sellLine = { label: 'Sell Target ($)', data: labels.map(() => sellVal), borderColor: '#dd6b20', backgroundColor: '#dd6b20', borderDash: [4, 4], borderWidth: 1.5, fill: false, tension: 0, yAxisID: 'y1', datalabels: { display: false }, pointRadius: 0 };
+                        speedDatasets.push(sellLine); totalDatasets.push(sellLine);
+                    }
+                }
             }
         }
 
@@ -921,6 +1080,344 @@
         });
     }
 
+    // ==========================================
+    // DATA INTEGRITY TOGGLES
+    // ==========================================
+    function toggleOutlierFilter() {
+        isOutlierFilterEnabled = !isOutlierFilterEnabled;
+        const btn = document.getElementById('outlierBtn');
+        btn.innerText = `🛡️ Outlier Filter: ${isOutlierFilterEnabled ? 'ON' : 'OFF'}`;
+        btn.style.backgroundColor = isOutlierFilterEnabled ? '#2c7a7b' : '#718096';
+        if (currentCardDetails) {
+            if (currentDisplayData.length > 0) renderCharts();
+            updateRecentSales(); updateFinancialTools();
+        }
+    }
+
+    function togglePriceMA() {
+        isPriceMAEnabled = !isPriceMAEnabled;
+        const btn = document.getElementById('priceMABtn');
+        btn.innerText = `📈 7-Day Price Avg: ${isPriceMAEnabled ? 'ON' : 'OFF'}`;
+        btn.style.backgroundColor = isPriceMAEnabled ? '#2f855a' : '#4a5568';
+        if (currentDisplayData.length > 0) renderCharts();
+    }
+
+    // ==========================================
+    // FINANCIAL TOOLS (ARBITRAGE + BUY/SELL ALERTS)
+    // ==========================================
+    function readStorageJSON(key) {
+        try { return JSON.parse(localStorage.getItem(key) || '{}') || {}; } catch(e) { return {}; }
+    }
+    function writeStorageJSON(key, obj) {
+        try { localStorage.setItem(key, JSON.stringify(obj)); } catch(e) { /* storage full or blocked - non-fatal */ }
+    }
+
+    function getFinanceSettings(cardName) {
+        if (!cardName) return {};
+        return readStorageJSON('psaDash_finance')[cardName] || {};
+    }
+
+    function persistFinanceSettings() {
+        if (!currentCardDetails || isCompareMode || isSetAggregateMode) return;
+        let all = readStorageJSON('psaDash_finance');
+        all[currentCardDetails] = {
+            cost: document.getElementById('finCost').value,
+            fee: document.getElementById('finFee').value,
+            buy: document.getElementById('finBuy').value,
+            sell: document.getElementById('finSell').value
+        };
+        writeStorageJSON('psaDash_finance', all);
+    }
+
+    function loadFinanceInputs() {
+        const s = getFinanceSettings(currentCardDetails);
+        document.getElementById('finCost').value = s.cost || '';
+        document.getElementById('finFee').value = s.fee || '';
+        document.getElementById('finBuy').value = s.buy || '';
+        document.getElementById('finSell').value = s.sell || '';
+    }
+
+    function onFinanceInput() { persistFinanceSettings(); updateFinancialTools(); }
+    function onFinanceChange() { persistFinanceSettings(); updateFinancialTools(); if (currentDisplayData.length > 0) renderCharts(); }
+
+    function fmtUSD(val) { return val.toLocaleString('en-US', { style: 'currency', currency: 'USD' }); }
+
+    // Returns { latestAvg, latestDate, weekAvg } from the daily-run averages, or nulls.
+    function getMarketSnapshot() {
+        if (isCompareMode || isSetAggregateMode) return { latestAvg: null, latestDate: null, weekAvg: null };
+        const dbEntry = getCardDatabaseEntry(currentCardDetails);
+        if (!dbEntry || !dbEntry.cert || !priceData || priceData.length === 0) return { latestAvg: null, latestDate: null, weekAvg: null };
+        const { groups } = getGroupedPullPrices(dbEntry.cert);
+        let dates = Object.keys(groups).sort((a, b) => (toDateObj(b) || new Date(0)) - (toDateObj(a) || new Date(0)));
+        if (dates.length === 0) return { latestAvg: null, latestDate: null, weekAvg: null };
+
+        const runAvg = d => groups[d].reduce((a, b) => a + b, 0) / groups[d].length;
+        let latestDate = dates[0];
+        let latestAvg = runAvg(latestDate);
+
+        let weekAvg = null;
+        let end = toDateObj(latestDate);
+        if (end) {
+            let start = new Date(end.getTime() - 6 * 86400000);
+            let vals = dates.filter(d => { let t = toDateObj(d); return t && t >= start && t <= end; }).map(runAvg);
+            if (vals.length > 0) weekAvg = vals.reduce((a, b) => a + b, 0) / vals.length;
+        }
+        return { latestAvg: latestAvg, latestDate: latestDate, weekAvg: weekAvg };
+    }
+
+    function updateFinancialTools() {
+        const panel = document.getElementById('financePanel');
+        if (!panel || panel.style.display === 'none' || isCompareMode || isSetAggregateMode) return;
+
+        const arbOut = document.getElementById('arbitrageOutput');
+        const signalOut = document.getElementById('signalOutput');
+        const { latestAvg, latestDate, weekAvg } = getMarketSnapshot();
+
+        // --- Grading Arbitrage Calculator ---
+        let cost = parseFloat(document.getElementById('finCost').value);
+        let fee = parseFloat(document.getElementById('finFee').value);
+        arbOut.className = 'finance-output';
+        if (latestAvg === null) {
+            arbOut.innerText = 'Upload price data (with a database cert match) to calculate margin.';
+        } else if (isNaN(cost) && isNaN(fee)) {
+            arbOut.innerText = `Current PSA 10 Market Avg: ${fmtUSD(latestAvg)}. Enter your costs to calculate margin.`;
+        } else {
+            let totalCost = (isNaN(cost) ? 0 : cost) + (isNaN(fee) ? 0 : fee);
+            let profit = latestAvg - totalCost;
+            let marginTxt = totalCost > 0 ? ` (${((profit / totalCost) * 100).toFixed(1)}% ROI)` : '';
+            arbOut.classList.add(profit >= 0 ? 'profit-positive' : 'profit-negative');
+            arbOut.innerText = `${profit >= 0 ? '▲ Profit' : '▼ Loss'}: ${fmtUSD(profit)}${marginTxt} — Market Avg ${fmtUSD(latestAvg)} minus ${fmtUSD(totalCost)} all-in cost.`;
+        }
+
+        // --- Buy / Sell Alerts ---
+        let buy = parseFloat(document.getElementById('finBuy').value);
+        let sell = parseFloat(document.getElementById('finSell').value);
+        signalOut.className = 'finance-output';
+        if (latestAvg === null) {
+            signalOut.innerText = 'Upload price data to activate alerts.';
+        } else if (isNaN(buy) && isNaN(sell)) {
+            signalOut.innerText = `Latest run avg: ${fmtUSD(latestAvg)}. Set targets to activate alerts.`;
+        } else if (!isNaN(sell) && sell > 0 && latestAvg >= sell) {
+            signalOut.classList.add('signal-sell');
+            signalOut.innerText = `🔔 SELL SIGNAL — latest avg ${fmtUSD(latestAvg)} is at/above your ${fmtUSD(sell)} target.`;
+        } else if (!isNaN(buy) && buy > 0 && latestAvg <= buy) {
+            signalOut.classList.add('signal-buy');
+            signalOut.innerText = `🔔 BUY SIGNAL — latest avg ${fmtUSD(latestAvg)} is at/below your ${fmtUSD(buy)} target.`;
+        } else {
+            signalOut.innerText = `HOLD — latest avg ${fmtUSD(latestAvg)} is inside your target band.`;
+        }
+
+        // --- Listing Assistant ---
+        let title = generateListingTitle(currentCardDetails);
+        const titleBox = document.getElementById('listingTitle');
+        titleBox.value = title;
+        document.getElementById('titleCounter').innerText = `${title.length}/80 chars`;
+
+        const pricingOut = document.getElementById('listingPricing');
+        if (latestAvg === null) {
+            pricingOut.innerText = 'Upload price data for pricing suggestions.';
+        } else {
+            let parts = [`Latest Run Avg: ${fmtUSD(latestAvg)} (${latestDate})`];
+            if (weekAvg !== null) parts.push(`7-Day Avg: ${fmtUSD(weekAvg)}`);
+            parts.push(`Suggested BIN: ${fmtUSD(latestAvg * 1.05)}`);
+            pricingOut.innerText = parts.join(' • ');
+        }
+    }
+
+    // ==========================================
+    // LISTING COPY/PASTE ASSISTANT
+    // ==========================================
+    function generateListingTitle(cardName) {
+        if (!cardName) return "";
+        let t = cardName.replace(/\s+/g, ' ').trim();
+        t = t.replace(/\b[A-Z0-9]{2,5}\sEN-/g, ''); // strip internal set codes like "PRE EN-"
+        t = t.replace(/SPECIAL ILLUSTRATION RARE/g, 'SIR')
+             .replace(/ILLUSTRATION RARE/g, 'IR')
+             .replace(/SPECIAL ALTERNATE ART/g, 'SP ALT ART')
+             .replace(/ALTERNATE ART/g, 'ALT ART')
+             .replace(/FIRST PARTNER ILLUSTRATION COLLECTION SERIES 1/g, 'FIRST PARTNER');
+        t = t + ' PSA 10 GEM MINT';
+        if (t.length > 80) t = t.replace(' GEM MINT', ''); // eBay's 80-char title cap
+        if (t.length > 80) t = t.substring(0, 80).trim();
+        return t;
+    }
+
+    function copyTextToClipboard(text, btn) {
+        const done = () => {
+            const original = btn.dataset.label || btn.innerText;
+            btn.dataset.label = original;
+            btn.innerText = '✅ Copied!';
+            setTimeout(() => { btn.innerText = btn.dataset.label; }, 1500);
+        };
+        const fallback = () => {
+            const ta = document.createElement('textarea');
+            ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+            document.body.appendChild(ta); ta.select();
+            try { document.execCommand('copy'); done(); } catch(e) { alert('Copy failed - please copy manually.'); }
+            document.body.removeChild(ta);
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(done).catch(fallback);
+        } else { fallback(); }
+    }
+
+    function copyListingTitle(btn) { copyTextToClipboard(document.getElementById('listingTitle').value, btn); }
+    function copyListingPricing(btn) { copyTextToClipboard(document.getElementById('listingPricing').innerText, btn); }
+
+    // ==========================================
+    // PERSISTENT WATCHLISTS (localStorage)
+    // ==========================================
+    function getWatchlists() { return readStorageJSON('psaDash_watchlists'); }
+
+    function refreshWatchlistDropdown(selectedName) {
+        const sel = document.getElementById('watchlistSelect');
+        sel.innerHTML = '<option value="">— Saved Watchlists —</option>';
+        Object.keys(getWatchlists()).sort().forEach(name => {
+            const opt = document.createElement('option');
+            opt.value = name; opt.textContent = name;
+            sel.appendChild(opt);
+        });
+        if (selectedName) sel.value = selectedName;
+    }
+
+    function saveCurrentWatchlist() {
+        let cards = [];
+        if (comparisonList.length > 0) cards = [...comparisonList];
+        else if (currentCardDetails && !isCompareMode && !isSetAggregateMode && !currentCardDetails.startsWith('SPREADSHEET') && !currentCardDetails.startsWith('SET AGGREGATE')) cards = [currentCardDetails];
+        if (cards.length === 0) { alert("Select a card or build a comparison queue first, then save it as a watchlist."); return; }
+
+        let name = prompt(`Name this watchlist (${cards.length} card${cards.length > 1 ? 's' : ''}):`, "My Watchlist");
+        if (!name || !name.trim()) return;
+        name = name.trim();
+
+        const lists = getWatchlists();
+        lists[name] = cards;
+        writeStorageJSON('psaDash_watchlists', lists);
+        refreshWatchlistDropdown(name);
+        alert(`Watchlist "${name}" saved. It will persist across page refreshes.`);
+    }
+
+    function loadWatchlist() {
+        const name = document.getElementById('watchlistSelect').value;
+        if (!name) { alert("Pick a saved watchlist from the dropdown first."); return; }
+        const cards = getWatchlists()[name];
+        if (!cards || cards.length === 0) { alert("This watchlist is empty or missing."); return; }
+        if (rawData.length === 0) { alert("Upload the Population CSV first, then load the watchlist."); return; }
+
+        const available = cards.filter(c => rawData.some(r => r['Card Details'] === c));
+        if (available.length === 0) { alert("None of the saved cards exist in the currently loaded Population CSV."); return; }
+        if (available.length < cards.length) alert(`${cards.length - available.length} saved card(s) were not found in this CSV and were skipped.`);
+
+        if (available.length === 1) {
+            isCompareMode = false; isSetAggregateMode = false;
+            currentCardDetails = available[0];
+            document.getElementById('displayCardName').innerText = currentCardDetails;
+            const dbEntry = getCardDatabaseEntry(currentCardDetails);
+            const imgElement = document.getElementById('cardDisplayImage');
+            if (dbEntry && dbEntry.image) { imgElement.src = dbEntry.image; imgElement.style.display = 'block'; }
+            else { imgElement.style.display = 'none'; }
+            resetDashboardViews(); document.getElementById('mainDashboard').style.display = 'block';
+            loadFinanceInputs(); prepareCardData(); updateChart(0);
+        } else {
+            comparisonList = available.slice(0, 3); // compare engine caps at 3 overlays
+            document.getElementById('addCompareBtn').innerText = `➕ Add to Compare (${comparisonList.length}/3)`;
+            document.getElementById('viewCompareBtn').style.display = 'inline-block';
+            document.getElementById('clearCompareBtn').style.display = 'inline-block';
+            viewCompare();
+        }
+    }
+
+    function deleteWatchlist() {
+        const name = document.getElementById('watchlistSelect').value;
+        if (!name) { alert("Pick a saved watchlist from the dropdown first."); return; }
+        if (!confirm(`Delete watchlist "${name}"? This cannot be undone.`)) return;
+        const lists = getWatchlists();
+        delete lists[name];
+        writeStorageJSON('psaDash_watchlists', lists);
+        refreshWatchlistDropdown();
+    }
+
+    // ==========================================
+    // 1-CLICK PDF TEAR SHEET (jsPDF)
+    // ==========================================
+    function exportTearSheet() {
+        if (document.getElementById('tableViewContainer').style.display === 'block') { alert("Tear sheets are not available for the spreadsheet view. Select a card, comparison, or set aggregate first."); return; }
+        if (!currentCardDetails || currentDisplayData.length === 0) { alert("Load data and select a card first."); return; }
+        if (typeof window.jspdf === 'undefined' || !window.jspdf.jsPDF) { alert("PDF library failed to load. Check your internet connection and refresh."); return; }
+
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF('p', 'mm', 'a4');
+        const pageW = 210, pageH = 297, margin = 12, contentW = pageW - margin * 2;
+        let y = 16;
+
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(15); doc.setTextColor(26, 54, 93);
+        const titleLines = doc.splitTextToSize(currentCardDetails, contentW);
+        doc.text(titleLines, margin, y);
+        y += titleLines.length * 6.5 + 1;
+
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(113, 128, 150);
+        doc.text(`PSA Population & Market Tear Sheet — Generated ${new Date().toLocaleString()}`, margin, y);
+        y += 8;
+
+        // Summary stat grid (3 x 2)
+        const stats = [
+            ['Today Added (Total)', document.getElementById('statTodayTotal').innerText],
+            ['Period Added (Total)', document.getElementById('statPeriodTotal').innerText],
+            ['Overall Gem Rate', document.getElementById('statOverallGem').innerText],
+            ['Today Added (PSA 10s)', document.getElementById('statToday10s').innerText],
+            ['Period Added (PSA 10s)', document.getElementById('statPeriod10s').innerText],
+            ['Period Gem Rate', document.getElementById('statPeriodGem').innerText]
+        ];
+        const boxW = contentW / 3, boxH = 16;
+        stats.forEach((stat, i) => {
+            const bx = margin + (i % 3) * boxW, by = y + Math.floor(i / 3) * boxH;
+            doc.setDrawColor(226, 232, 240); doc.setFillColor(248, 250, 252);
+            doc.rect(bx, by, boxW - 2, boxH - 2, 'FD');
+            doc.setFontSize(7); doc.setTextColor(113, 128, 150); doc.setFont('helvetica', 'normal');
+            doc.text(stat[0].toUpperCase(), bx + 2, by + 5);
+            doc.setFontSize(12); doc.setTextColor(45, 55, 72); doc.setFont('helvetica', 'bold');
+            doc.text(stat[1], bx + 2, by + 11.5);
+        });
+        y += boxH * 2 + 4;
+
+        const addChartToPdf = (chart, heading) => {
+            if (!chart || !chart.canvas) return;
+            const canvas = chart.canvas;
+            if (!canvas.width || !canvas.height) return;
+            const imgH = contentW * (canvas.height / canvas.width);
+            if (y + imgH + 8 > pageH - margin) { doc.addPage(); y = 16; }
+            doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(26, 54, 93);
+            doc.text(heading, margin, y); y += 3;
+            doc.addImage(canvas.toDataURL('image/png', 1.0), 'PNG', margin, y, contentW, imgH);
+            y += imgH + 8;
+        };
+        addChartToPdf(mySpeedChart, 'Grading Speed & Market Price');
+        addChartToPdf(myTotalChart, isGrowthMode ? 'Cumulative Growth in Period & Market Price' : 'Cumulative Total Population & Market Price');
+
+        // Recent daily-run averages (single-card mode only)
+        if (!isCompareMode && !isSetAggregateMode) {
+            const dbEntry = getCardDatabaseEntry(currentCardDetails);
+            if (dbEntry && dbEntry.cert && priceData && priceData.length > 0) {
+                const { groups } = getGroupedPullPrices(dbEntry.cert);
+                const dates = Object.keys(groups).sort((a, b) => (toDateObj(b) || new Date(0)) - (toDateObj(a) || new Date(0))).slice(0, 5);
+                if (dates.length > 0) {
+                    if (y + 10 + dates.length * 5 > pageH - margin) { doc.addPage(); y = 16; }
+                    doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(26, 54, 93);
+                    doc.text(`Recent Daily Run Averages (Cert #${dbEntry.cert})`, margin, y); y += 5.5;
+                    doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(45, 55, 72);
+                    dates.forEach(d => {
+                        const avg = groups[d].reduce((a, b) => a + b, 0) / groups[d].length;
+                        doc.text(`${d}  —  ${fmtUSD(avg)}  (${groups[d].length} sale${groups[d].length > 1 ? 's' : ''})`, margin + 2, y);
+                        y += 5;
+                    });
+                }
+            }
+        }
+
+        const safeCardName = currentCardDetails.replace(/[^a-z0-9]/gi, '_').substring(0, 30);
+        doc.save(`Tear_Sheet_${safeCardName}.pdf`);
+    }
+
     function exportChart(canvasId, prefix) {
         const canvas = document.getElementById(canvasId); if (!canvas) return;
         let safeCardName = currentCardDetails.replace(/[^a-z0-9]/gi, '_').substring(0, 30);
@@ -928,6 +1425,9 @@
         let fileName = `${finalPrefix}_${safeCardName}.png`;
         const link = document.createElement('a'); link.download = fileName; link.href = canvas.toDataURL('image/png', 1.0); link.click();
     }
+
+    // Restore saved watchlists on page load
+    refreshWatchlistDropdown();
 </script>
 
 </body>
