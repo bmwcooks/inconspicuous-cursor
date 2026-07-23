@@ -607,6 +607,21 @@
     }
 
     // ==========================================
+    // SET AGGREGATE MODE (MACRO VIEW)
+    // ==========================================
+    function loadSetAggregate() {
+        if (!currentSetDetails || !currentSetDetails.set) { alert("Please select a specific Set from the tabs above first."); return; }
+        isSetAggregateMode = true; isCompareMode = false;
+        currentCardDetails = "SET AGGREGATE: " + currentSetDetails.set;
+        document.getElementById('displayCardName').innerText = currentCardDetails;
+        document.getElementById('cardDisplayImage').style.display = 'none';
+        document.querySelectorAll('.card-item').forEach(c => c.classList.remove('active'));
+
+        resetDashboardViews(); document.getElementById('mainDashboard').style.display = 'block';
+        prepareSetData(); updateChart(0);
+    }
+
+    // ==========================================
     // COMPARE MODE CONTROLS
     // ==========================================
     function addToCompare() {
