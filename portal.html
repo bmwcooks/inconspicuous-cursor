@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Card Ladder URL Portal</title>
+    <script src="database.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #f4f7f6; color: #333; margin: 0; padding: 20px; }
+        .container { max-width: 900px; margin: auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        h1 { color: #1A365D; text-align: center; margin-top: 5px; }
+        .subtitle { text-align: center; color: #718096; font-size: 13px; margin-top: -10px; margin-bottom: 20px; }
+        .search-box { width: 100%; box-sizing: border-box; padding: 12px 15px; border: 1px solid #cbd5e0; border-radius: 6px; font-size: 14px; margin-bottom: 15px; }
+        .card-list { border: 1px solid #cbd5e0; border-radius: 6px; background: #fff; max-height: 320px; overflow-y: auto; margin-bottom: 20px; }
+        .card-item { padding: 10px 15px; cursor: pointer; border-bottom: 1px solid #edf2f7; font-size: 13px; color: #2d3748; transition: background 0.2s; }
+        .card-item:last-child { border-bottom: none; }
+        .card-item:hover { background-color: #ebf8ff; }
+        .card-item.active { background-color: #bee3f8; font-weight: bold; border-left: 4px solid #3182ce; }
+        .empty-note { padding: 15px; color: #718096; font-size: 13px; font-style: italic; }
+        .output-panel { display: none; background: #eef2f5; border-radius: 6px; padding: 15px; }
+        .output-panel h3 { margin: 0 0 10px 0; color: #1A365D; font-size: 15px; }
+        .output-row { margin-bottom: 15px; }
+        .output-label { font-size: 11px; font-weight: bold; color: #4a5568; text-transform: uppercase; display: block; margin-bottom: 4px; }
+        .output-value { width: 100%; box-sizing: border-box; padding: 10px; border: 1px solid #cbd5e0; border-radius: 4px; font-size: 13px; font-family: monospace; background: #fff; }
+        .btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+        button { padding: 8px 12px; border: none; border-radius: 4px; font-size: 13px; background-color: #1A365D; color: white; cursor: pointer; transition: background 0.3s; }
+        button:hover { background-color: #2c5282; }
+        button.secondary { background-color: #4a5568; }
+        a.open-link { display: inline-block; padding: 8px 12px; border-radius: 4px; font-size: 13px; background-color: #48bb78; color: white; text-decoration: none; }
+        a.open-link.psa { background-color: #805ad5; }
+        .options-row { display: flex; align-items: center; gap: 8px; margin-bottom: 15px; font-size: 13px; color: #4a5568; }
+        .back-link { display: block; text-align: center; margin-top: 20px; font-size: 13px; color: #2b6cb0; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>🔗 Card Ladder URL Portal</h1>
+    <p class="subtitle">Pick a card from the internal database to auto-generate the exact search string and URL — no UI friction, no wasted manual searches.</p>
+
+    <input type="text" id="searchBox" class="search-box" placeholder="Filter cards... (e.g. UMBREON, ZORO, PIKACHU)" oninput="renderCardList()">
+    <div id="cardList" class="card-list"></div>
+
+    <div class="options-row">
+        <input type="checkbox" id="appendPsa10" checked onchange="renderOutput()">
+        <label for="appendPsa10">Append "PSA 10" to the search query</label>
+    </div>
+
+    <div id="outputPanel" class="output-panel">
+        <h3 id="selectedCardName"></h3>
+        <div class="output-row">
+            <span class="output-label">Search Query (editable)</span>
+            <input type="text" id="queryString" class="output-value" oninput="syncUrlFromQuery()">
+            <div class="btn-row">
+                <button onclick="copyValue('queryString', this)">📋 Copy Query</button>
+            </div>
+        </div>
+        <div class="output-row">
+            <span class="output-label">Card Ladder URL</span>
+            <input type="text" id="urlString" class="output-value" readonly>
+            <div class="btn-row">
+                <button onclick="copyValue('urlString', this)">📋 Copy URL</button>
+                <a id="openCardLadder" class="open-link" href="#" target="_blank" rel="noopener">🚀 Open Card Ladder</a>
+                <a id="openPsaCert" class="open-link psa" href="#" target="_blank" rel="noopener">🎖️ Open PSA Cert</a>
+            </div>
+        </div>
+    </div>
+
+    <a class="back-link" href="index.html">⬅ Back to the Pop &amp; Market Dashboard</a>
+</div>
+
+<script>
+    let selectedCard = null;
+
+    // Turns an internal database string into a clean, human-style search query.
+    function buildSearchQuery(cardName) {
+        let q = cardName.replace(/\s+/g, ' ').trim();
+        q = q.replace(/\b[A-Z0-9]{2,5}\sEN-/g, ''); // strip internal set codes like "PRE EN-"
+        q = q.replace(/FIRST PARTNER ILLUSTRATION COLLECTION SERIES 1/g, 'FIRST PARTNER');
+        if (document.getElementById('appendPsa10').checked) q += ' PSA 10';
+        return q;
+    }
+
+    function renderCardList() {
+        const container = document.getElementById('cardList');
+        container.innerHTML = '';
+        if (typeof cardDatabase === 'undefined' || !cardDatabase) {
+            container.innerHTML = '<div class="empty-note">database.js failed to load — make sure it sits next to this file.</div>';
+            return;
+        }
+        const filter = document.getElementById('searchBox').value.trim().toUpperCase();
+        const names = Object.keys(cardDatabase).sort().filter(n => !filter || n.toUpperCase().includes(filter));
+        if (names.length === 0) {
+            container.innerHTML = '<div class="empty-note">No cards match that filter.</div>';
+            return;
+        }
+        names.forEach(name => {
+            const div = document.createElement('div');
+            div.className = 'card-item' + (name === selectedCard ? ' active' : '');
+            div.textContent = name;
+            div.onclick = () => { selectedCard = name; renderCardList(); renderOutput(); };
+            container.appendChild(div);
+        });
+    }
+
+    function renderOutput() {
+        if (!selectedCard) return;
+        const entry = cardDatabase[selectedCard] || {};
+        document.getElementById('outputPanel').style.display = 'block';
+        document.getElementById('selectedCardName').innerText = selectedCard;
+        document.getElementById('queryString').value = buildSearchQuery(selectedCard);
+        syncUrlFromQuery();
+
+        const psaLink = document.getElementById('openPsaCert');
+        if (entry.cert) {
+            psaLink.style.display = 'inline-block';
+            psaLink.href = 'https://www.psacard.com/cert/' + encodeURIComponent(entry.cert);
+            psaLink.innerText = '🎖️ Open PSA Cert #' + entry.cert;
+        } else {
+            psaLink.style.display = 'none';
+        }
+    }
+
+    function syncUrlFromQuery() {
+        const query = document.getElementById('queryString').value.trim();
+        const url = 'https://app.cardladder.com/search?query=' + encodeURIComponent(query);
+        document.getElementById('urlString').value = url;
+        document.getElementById('openCardLadder').href = url;
+    }
+
+    function copyValue(elId, btn) {
+        const text = document.getElementById(elId).value;
+        const done = () => {
+            const original = btn.dataset.label || btn.innerText;
+            btn.dataset.label = original;
+            btn.innerText = '✅ Copied!';
+            setTimeout(() => { btn.innerText = btn.dataset.label; }, 1500);
+        };
+        const fallback = () => {
+            const el = document.getElementById(elId);
+            el.select();
+            try { document.execCommand('copy'); done(); } catch(e) { alert('Copy failed - please copy manually.'); }
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(done).catch(fallback);
+        } else { fallback(); }
+    }
+
+    renderCardList();
+</script>
+
+</body>
+</html>
