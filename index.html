@@ -52,6 +52,8 @@
         .summary-card.accent-red { border-left-color: #e53e3e; }
         .summary-card h4 { margin: 0 0 10px 0; font-size: 13px; color: #718096; text-transform: uppercase; }
         .summary-card .value { font-size: 24px; font-weight: bold; color: #2d3748; margin: 0; }
+        .summary-card .meta { margin: 6px 0 0 0; font-size: 11px; color: #a0aec0; font-weight: normal; }
+        .gem-log-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 15px; margin-top: 10px; }
         .sales-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 15px; margin-top: 10px; }
         .sales-card { background: #ffffff; border-left: 5px solid #48bb78; padding: 15px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border: 1px solid #eaeaea; }
         .sales-card h4 { margin: 0 0 8px 0; font-size: 12px; color: #718096; text-transform: uppercase; }
@@ -221,7 +223,48 @@
             </div>
         </div>
 
+        <div class="chart-wrapper" id="gemRateLogWrapper" style="margin-bottom: 30px;">
+            <div class="chart-header">
+                <h3>Gem Rate Log</h3>
+            </div>
+            <div class="gem-log-grid">
+                <div class="summary-card accent-red">
+                    <h4>Daily Gem Rate</h4>
+                    <p class="value" id="statGemDaily">—</p>
+                    <p class="meta" id="statGemDailyMeta"></p>
+                </div>
+                <div class="summary-card accent-red">
+                    <h4>3-Day Gem Rate</h4>
+                    <p class="value" id="statGem3d">—</p>
+                    <p class="meta" id="statGem3dMeta"></p>
+                </div>
+                <div class="summary-card accent-red">
+                    <h4>7-Day Gem Rate</h4>
+                    <p class="value" id="statGem7d">—</p>
+                    <p class="meta" id="statGem7dMeta"></p>
+                </div>
+                <div class="summary-card accent-red">
+                    <h4>14-Day Gem Rate</h4>
+                    <p class="value" id="statGem14d">—</p>
+                    <p class="meta" id="statGem14dMeta"></p>
+                </div>
+            </div>
+        </div>
+
         <div class="graphs-wrapper" id="bottomGraphsWrapper">
+            <div class="chart-wrapper" id="gemRateChartWrapper">
+                <div class="chart-header">
+                    <div class="chart-header-left">
+                        <h3>Daily Gem Rate</h3>
+                        <button class="toggle-btn" id="gemWindowBtn" onclick="cycleGemWindow()">Overlay: 3-Day</button>
+                    </div>
+                    <button class="export-btn" onclick="exportChart('gemRateChart', 'Gem_Rate')">Download PNG</button>
+                </div>
+                <div class="chart-container">
+                    <canvas id="gemRateChart"></canvas>
+                </div>
+            </div>
+
             <div class="chart-wrapper">
                 <div class="chart-header">
                     <div class="chart-header-left">
@@ -328,6 +371,8 @@
     let currentDisplayData = []; 
     let mySpeedChart = null;
     let myTotalChart = null;
+    let myGemChart = null;
+    let gemWindowDays = 3; // rolling overlay on the gem-rate chart: 3, 7, or 14
     let currentCardDetails = "";
     let isGrowthMode = false; 
 
@@ -430,6 +475,7 @@
         document.getElementById('tableViewContainer').style.display = 'none';
         document.getElementById('topChartWrapper').style.display = 'block';
         document.getElementById('summaryContainer').style.display = 'grid';
+        document.getElementById('gemRateLogWrapper').style.display = 'block';
         document.getElementById('bottomGraphsWrapper').style.display = 'flex';
         // Financial tools only make sense for a single card (needs one cert number)
         document.getElementById('financePanel').style.display = (!isCompareMode && !isSetAggregateMode) ? 'block' : 'none';
@@ -609,6 +655,7 @@
 
         document.getElementById('topChartWrapper').style.display = 'none';
         document.getElementById('summaryContainer').style.display = 'none';
+        document.getElementById('gemRateLogWrapper').style.display = 'none';
         document.getElementById('bottomGraphsWrapper').style.display = 'none';
         document.getElementById('financePanel').style.display = 'none';
         document.getElementById('cardDisplayImage').style.display = 'none';
@@ -819,7 +866,7 @@
         if (days > 0) displayData = displayData.slice(-days);
         currentDisplayData = displayData;
         
-        renderCharts(); updateSummaryStats(); updateRecentSales(); updateFinancialTools(); 
+        renderCharts(); updateSummaryStats(); updateGemRateLog(); updateRecentSales(); updateFinancialTools(); 
     }
 
     function applyCustomDateRange() {
@@ -838,7 +885,7 @@
 
         if (displayData.length === 0) { alert("No data found in this date range."); return; }
         currentDisplayData = displayData;
-        renderCharts(); updateSummaryStats(); updateRecentSales(); updateFinancialTools(); 
+        renderCharts(); updateSummaryStats(); updateGemRateLog(); updateRecentSales(); updateFinancialTools(); 
     }
 
     function toggleGrowthMode() {
@@ -884,6 +931,164 @@
         document.getElementById('statTodayTotal').innerText = `+${todayTotalAdded}`; document.getElementById('statToday10s').innerText = `+${today10sAdded}`;
         document.getElementById('statPeriodTotal').innerText = `+${periodTotalAdded}`; document.getElementById('statPeriod10s').innerText = `+${period10sAdded}`;
         document.getElementById('statPeriodGem').innerText = periodGemRate; document.getElementById('statOverallGem').innerText = overallGemRate;
+        updateGemRateLog();
+    }
+
+    // ==========================================
+    // GEM RATE LOG + DAILY GEM RATE CHART
+    // ==========================================
+    // Daily gem rate = that day's PSA 10s added / total cards added.
+    // Windowed rates (3/7/14) sum the same deltas over the trailing N displayed days
+    // so a weekend of zero volume does not fabricate a 0% day — it simply contributes
+    // nothing to the numerator or denominator.
+    function gemAccessors() {
+        if (isCompareMode) {
+            return {
+                deltaTotal: item => comparisonList.reduce((s, c) => s + (item[c + '_deltaTotal'] || 0), 0),
+                delta10: item => comparisonList.reduce((s, c) => s + (item[c + '_delta10'] || 0), 0),
+                total: item => comparisonList.reduce((s, c) => s + (item[c + '_Total'] || 0), 0),
+                psa10: item => comparisonList.reduce((s, c) => s + (item[c + '_PSA10'] || 0), 0)
+            };
+        }
+        return {
+            deltaTotal: item => item.deltaTotal || 0,
+            delta10: item => item.delta10 || 0,
+            total: item => parseInt(item['Total Pop']) || 0,
+            psa10: item => parseInt(item['PSA 10 Pop']) || 0
+        };
+    }
+
+    function fmtGemRate(rate) {
+        return (rate === null || rate === undefined || isNaN(rate)) ? '—' : rate.toFixed(1) + '%';
+    }
+
+    function windowedGemRate(dataArray, windowSize, getDeltaTotal, getDelta10) {
+        if (!dataArray || dataArray.length === 0) return { rate: null, added: 0, gems: 0, days: 0 };
+        let slice = dataArray.slice(-windowSize);
+        let added = 0, gems = 0;
+        slice.forEach(item => { added += getDeltaTotal(item) || 0; gems += getDelta10(item) || 0; });
+        return { rate: added > 0 ? (gems / added) * 100 : null, added: added, gems: gems, days: slice.length };
+    }
+
+    function seriesDailyGemRate(dataArray, getDeltaTotal, getDelta10) {
+        return dataArray.map(item => {
+            let added = getDeltaTotal(item) || 0;
+            return added > 0 ? ((getDelta10(item) || 0) / added) * 100 : null;
+        });
+    }
+
+    function seriesRollingGemRate(dataArray, windowSize, getDeltaTotal, getDelta10) {
+        return dataArray.map((_, i) => {
+            let start = Math.max(0, i - windowSize + 1);
+            let added = 0, gems = 0;
+            for (let j = start; j <= i; j++) {
+                added += getDeltaTotal(dataArray[j]) || 0;
+                gems += getDelta10(dataArray[j]) || 0;
+            }
+            return added > 0 ? (gems / added) * 100 : null;
+        });
+    }
+
+    function seriesCumulativeGemRate(dataArray, getTotal, getPsa10) {
+        return dataArray.map(item => {
+            let total = getTotal(item) || 0;
+            return total > 0 ? ((getPsa10(item) || 0) / total) * 100 : null;
+        });
+    }
+
+    function setGemStat(id, metaId, stats) {
+        document.getElementById(id).innerText = fmtGemRate(stats.rate);
+        document.getElementById(metaId).innerText = stats.added > 0
+            ? `+${stats.gems} / +${stats.added} over ${stats.days} day${stats.days === 1 ? '' : 's'}`
+            : (stats.days ? `No cards graded in last ${stats.days} day${stats.days === 1 ? '' : 's'}` : '');
+    }
+
+    function updateGemRateLog() {
+        const dataArray = currentDisplayData;
+        const dailyEl = document.getElementById('statGemDaily');
+        if (!dailyEl) return;
+        if (!dataArray || dataArray.length === 0) {
+            ['statGemDaily', 'statGem3d', 'statGem7d', 'statGem14d'].forEach(id => document.getElementById(id).innerText = '—');
+            ['statGemDailyMeta', 'statGem3dMeta', 'statGem7dMeta', 'statGem14dMeta'].forEach(id => document.getElementById(id).innerText = '');
+            return;
+        }
+        const acc = gemAccessors();
+        setGemStat('statGemDaily', 'statGemDailyMeta', windowedGemRate(dataArray, 1, acc.deltaTotal, acc.delta10));
+        setGemStat('statGem3d', 'statGem3dMeta', windowedGemRate(dataArray, 3, acc.deltaTotal, acc.delta10));
+        setGemStat('statGem7d', 'statGem7dMeta', windowedGemRate(dataArray, 7, acc.deltaTotal, acc.delta10));
+        setGemStat('statGem14d', 'statGem14dMeta', windowedGemRate(dataArray, 14, acc.deltaTotal, acc.delta10));
+    }
+
+    function cycleGemWindow() {
+        gemWindowDays = gemWindowDays === 3 ? 7 : (gemWindowDays === 7 ? 14 : 3);
+        document.getElementById('gemWindowBtn').innerText = `Overlay: ${gemWindowDays}-Day`;
+        if (currentDisplayData.length > 0) renderCharts();
+    }
+
+    function renderGemRateChart(labels, dataArray) {
+        let datasets = [];
+        const compareColors = [
+            { daily: '#e53e3e', roll: '#dd6b20', stock: '#1A365D' },
+            { daily: '#38A169', roll: '#D69E2E', stock: '#22543D' },
+            { daily: '#805AD5', roll: '#ED64A6', stock: '#44337A' }
+        ];
+
+        if (isCompareMode) {
+            comparisonList.forEach((cName, idx) => {
+                let color = compareColors[idx];
+                let shortLabel = cName.substring(0, 15) + '...';
+                let getT = item => item[cName + '_deltaTotal'] || 0;
+                let getG = item => item[cName + '_delta10'] || 0;
+                datasets.push({
+                    label: `Daily — ${shortLabel}`, data: seriesDailyGemRate(dataArray, getT, getG),
+                    borderColor: color.daily, backgroundColor: color.daily, borderWidth: 2, fill: false, tension: 0.15, spanGaps: true, yAxisID: 'y',
+                    datalabels: { display: false }, pointRadius: 3
+                });
+                datasets.push({
+                    label: `${gemWindowDays}-Day — ${shortLabel}`, data: seriesRollingGemRate(dataArray, gemWindowDays, getT, getG),
+                    borderColor: color.roll, backgroundColor: color.roll, borderDash: [6, 4], borderWidth: 2, fill: false, tension: 0.2, spanGaps: true, yAxisID: 'y',
+                    datalabels: { display: false }, pointRadius: 0
+                });
+            });
+        } else {
+            const acc = gemAccessors();
+            datasets.push({
+                label: 'Daily Gem Rate', data: seriesDailyGemRate(dataArray, acc.deltaTotal, acc.delta10),
+                borderColor: '#e53e3e', backgroundColor: '#e53e3e', borderWidth: 2, fill: false, tension: 0.15, spanGaps: true, yAxisID: 'y',
+                datalabels: { display: false }, pointRadius: 3, pointBackgroundColor: '#fff', pointBorderWidth: 2
+            });
+            datasets.push({
+                label: `${gemWindowDays}-Day Gem Rate`, data: seriesRollingGemRate(dataArray, gemWindowDays, acc.deltaTotal, acc.delta10),
+                borderColor: '#dd6b20', backgroundColor: '#dd6b20', borderDash: [6, 4], borderWidth: 2, fill: false, tension: 0.2, spanGaps: true, yAxisID: 'y',
+                datalabels: { display: false }, pointRadius: 0
+            });
+            datasets.push({
+                label: 'Cumulative Gem Rate', data: seriesCumulativeGemRate(dataArray, acc.total, acc.psa10),
+                borderColor: '#1A365D', backgroundColor: '#1A365D', borderDash: [2, 3], borderWidth: 2, fill: false, tension: 0.1, spanGaps: true, yAxisID: 'y',
+                datalabels: { display: false }, pointRadius: 0
+            });
+        }
+
+        if (myGemChart) myGemChart.destroy();
+        const canvas = document.getElementById('gemRateChart');
+        if (!canvas) return;
+        myGemChart = new Chart(canvas.getContext('2d'), {
+            type: 'line', data: { labels: labels, datasets: datasets },
+            options: {
+                responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    datalabels: { display: false },
+                    tooltip: { callbacks: { label: function(ctx) { let v = ctx.parsed.y; return ctx.dataset.label + ': ' + (v === null || v === undefined ? '—' : v.toFixed(1) + '%'); } } }
+                },
+                scales: {
+                    y: {
+                        type: 'linear', display: true, position: 'left', min: 0, suggestedMax: 100,
+                        title: { display: true, text: 'Gem Rate (%)', color: '#e53e3e', font: { weight: 'bold' } },
+                        ticks: { callback: function(value) { return value + '%'; } }
+                    }
+                }
+            }
+        });
     }
 
     function updateRecentSales() {
@@ -1078,6 +1283,8 @@
                 }
             }
         });
+
+        renderGemRateChart(labels, dataArray);
     }
 
     // ==========================================
@@ -1380,6 +1587,23 @@
         });
         y += boxH * 2 + 4;
 
+        const gemStats = [
+            ['Daily Gem Rate', document.getElementById('statGemDaily').innerText],
+            ['3-Day Gem Rate', document.getElementById('statGem3d').innerText],
+            ['7-Day Gem Rate', document.getElementById('statGem7d').innerText],
+            ['14-Day Gem Rate', document.getElementById('statGem14d').innerText]
+        ];
+        gemStats.forEach((stat, i) => {
+            const bx = margin + (i % 4) * (contentW / 4), by = y;
+            doc.setDrawColor(226, 232, 240); doc.setFillColor(248, 250, 252);
+            doc.rect(bx, by, contentW / 4 - 2, boxH - 2, 'FD');
+            doc.setFontSize(6.5); doc.setTextColor(113, 128, 150); doc.setFont('helvetica', 'normal');
+            doc.text(stat[0].toUpperCase(), bx + 2, by + 5);
+            doc.setFontSize(11); doc.setTextColor(45, 55, 72); doc.setFont('helvetica', 'bold');
+            doc.text(stat[1], bx + 2, by + 11.5);
+        });
+        y += boxH + 4;
+
         const addChartToPdf = (chart, heading) => {
             if (!chart || !chart.canvas) return;
             const canvas = chart.canvas;
@@ -1393,6 +1617,7 @@
         };
         addChartToPdf(mySpeedChart, 'Grading Speed & Market Price');
         addChartToPdf(myTotalChart, isGrowthMode ? 'Cumulative Growth in Period & Market Price' : 'Cumulative Total Population & Market Price');
+        addChartToPdf(myGemChart, 'Daily Gem Rate');
 
         // Recent daily-run averages (single-card mode only)
         if (!isCompareMode && !isSetAggregateMode) {
