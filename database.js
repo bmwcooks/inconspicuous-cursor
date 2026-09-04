@@ -29,12 +29,12 @@
         "2026 ONE PIECE PROMOS DON!! CARD DODGERS X ONE PIECE NIGHT": {cert: "167728118", image: "https://storage.googleapis.com/images.pricecharting.com/hxejwv7p3qm3xrn6/240.jpg"},
         "2026 ONE PIECE ROUND1 PROMOTION PACK 095 MONKEY D. LUFFY": {cert: "169852487", image: "https://d1htnxwo4o0jhw.cloudfront.net/spec/16782071/laiNxd5SPUORBWVu_iFVqA.jpg"},
         "2026 ONE PIECE ROUND1 PROMOTION PACK 068 TONY TONY CHOPPER": {cert: "171654080", image: "https://d1htnxwo4o0jhw.cloudfront.net/spec/16782076/vs97wLkB_kiiltWG8KOSLg.jpg"},
-        "2026 ONE PIECE ROUND1 PROMOTION PACK 056 BROOK": {cert: "", image: "https://d1htnxwo4o0jhw.cloudfront.net/spec/16782079/PKfb_B0OHUyGamXXvLyV9Q.jpg"},
+        "2026 ONE PIECE ROUND1 PROMOTION PACK 056 BROOK": {cert: "171784077", image: "https://d1htnxwo4o0jhw.cloudfront.net/spec/16782079/PKfb_B0OHUyGamXXvLyV9Q.jpg"},
         "2026 ONE PIECE ROUND1 PROMOTION PACK 054 NICO ROBIN": {cert: "171692215", image: "https://d1htnxwo4o0jhw.cloudfront.net/spec/16782077/fKV3tbOvekekX4KPMvW_zg.jpg"},
         "2026 ONE PIECE ROUND1 PROMOTION PACK 047 SANJI": {cert: "171654078", image: "https://d1htnxwo4o0jhw.cloudfront.net/spec/16782075/TeuXSiMhbUiOjUS6luur-A.jpg"},
-        "2026 ONE PIECE ROUND1 PROMOTION PACK 011 FRANKY": {cert: "", image: "https://d1htnxwo4o0jhw.cloudfront.net/spec/16782078/i8OoTcUGr02iUVw27nj9Ig.jpg"},
+        "2026 ONE PIECE ROUND1 PROMOTION PACK 011 FRANKY": {cert: "170325790", image: "https://d1htnxwo4o0jhw.cloudfront.net/spec/16782078/i8OoTcUGr02iUVw27nj9Ig.jpg"},
         "2026 ONE PIECE ROUND1 PROMOTION PACK 008 NAMI": {cert: "171692211", image: "https://d1htnxwo4o0jhw.cloudfront.net/spec/16782073/kdAUcr_FB0mamsfwk9tKmw.jpg"},
         "2026 ONE PIECE ROUND1 PROMOTION PACK 006 RORONOA ZORO": {cert: "171692213", image: "https://d1htnxwo4o0jhw.cloudfront.net/spec/16782072/v--xg2QaA0asX6zndcKeEg.jpg"},
-        "2026 ONE PIECE ROUND1 PROMOTION PACK 005 JINBE": {cert: "", image: "https://d1htnxwo4o0jhw.cloudfront.net/spec/16782072/v--xg2QaA0asX6zndcKeEg.jpg"},
-        "2026 ONE PIECE ROUND1 PROMOTION PACK 003 USOPP": {cert: "", image: "https://d1htnxwo4o0jhw.cloudfront.net/spec/16782074/LCEok51A90aM5mY7lQMjdA.jpg"}
+        "2026 ONE PIECE ROUND1 PROMOTION PACK 005 JINBE": {cert: "170325791", image: "https://d1htnxwo4o0jhw.cloudfront.net/spec/16782072/v--xg2QaA0asX6zndcKeEg.jpg"},
+        "2026 ONE PIECE ROUND1 PROMOTION PACK 003 USOPP": {cert: "170361107", image: "https://d1htnxwo4o0jhw.cloudfront.net/spec/16782074/LCEok51A90aM5mY7lQMjdA.jpg"}
     };
